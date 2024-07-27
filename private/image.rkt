@@ -1,7 +1,15 @@
 #lang racket/base
-(require racket/class net/base64 racket/file racket/lazy-require)
-(lazy-require [racket/draw (bitmap%)] [racket/snip (image-snip%)])
+(require racket/class net/base64 racket/file)
 (provide get-image)
+
+(define (lazy mod id)
+  (define cell #f)
+  (λ ()
+    (unless cell
+      (set! cell (dynamic-require mod id)))
+    cell))
+(define bitmap (lazy 'racket/draw 'bitmap%))
+(define image-snip (lazy 'racket/snip 'image-snip%))
 
 (define (get-image img)
   (define (bitmap->bytes bm)
@@ -16,6 +24,6 @@
      (bytes->string/latin-1 (base64-encode (file->bytes img) ""))]
     [else
      (cond
-       [(is-a? img bitmap%) (bitmap->bytes img)]
-       [(is-a? img image-snip%) (bitmap->bytes (send img get-bitmap))]
+       [(is-a? img (bitmap)) (bitmap->bytes img)]
+       [(is-a? img (image-snip)) (bitmap->bytes (send img get-bitmap))]
        [else (error 'get-image)])]))
