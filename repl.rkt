@@ -25,12 +25,36 @@
   
   (define (command-input? in)
     (regexp-match-peek #px"^\\s*," in))
+
+
+  ;; expeditor seems buggy, use ''' when pasting massive texts
   (define (multi-input? in)
     (regexp-match-peek #px"^\"\"\"" in))
-  (define (multi-end? str)
+  (define (multi-input-end? str)
     (regexp-match #px"\"\"\"$" str))
+
+  (define (multi-line? in)
+    (regexp-match-peek #px"^'''" in))
+
+  (define (forward p in)
+    (read-bytes (bytes-length (car p)) in))
   (struct message (content))
+  (struct lines (first))
   (define running? (make-parameter #f))
+
+  (define (read-multi-line first)
+    (define o (open-output-string))
+    (write-string first o)
+    (with-handlers ([exn:break? (λ (_) #f)])
+      (let f ()
+        (define v (read-line))
+        (cond
+          [(or (eof-object? v) (string=? v "'''"))
+           (get-output-string o)]
+          [else
+           (newline o)
+           (write-string v o)
+           (f)]))))
 
   (when (terminal-port? (current-input-port))
     (define ee (expeditor-open '()))
@@ -46,6 +70,12 @@
          [else
           (ee-reset-entry/break ee entry c)])))
     (define ns (namespace-anchor->namespace here))
+    (define (run s)
+      (sync preload-evt)
+      (call-with-continuation-prompt
+       (λ ()
+         (parameterize ([running? #t])
+           ((current-chat) s)))))
     
     (parameterize ([current-namespace ns]
                    [current-expeditor-reader
@@ -55,16 +85,16 @@
                           [(command-input? in)
                            =>
                            (λ (p)
-                             (read-bytes (bytes-length (car p)) in)
+                             (forward p in)
                              (orig in))]
                           [(eof-object? (peek-byte in)) eof]
                           [(multi-input? in)
                            =>
                            (λ (p)
-                             (read-bytes (bytes-length (car p)) in)
+                             (forward p in)
                              (define str (port->string in))
                              (cond
-                               [(multi-end? str)
+                               [(multi-input-end? str)
                                 =>
                                 (λ (p)
                                   (message
@@ -73,6 +103,11 @@
                                     (- (string-length str)
                                        (string-length (car p))))))]
                                [else (message str)]))]
+                          [(multi-line? in)
+                           =>
+                           (λ (p)
+                             (forward p in)
+                             (lines (port->string in)))]
                           [else
                            (message (port->string in))])))]
                    [current-expeditor-ready-checker
@@ -82,29 +117,31 @@
                           [(command-input? in)
                            =>
                            (λ (p)
-                             (read-bytes (bytes-length (car p)) in)
+                             (forward p in)
                              (orig in))]
                           [(multi-input? in)
                            =>
                            (λ (p)
-                             (read-bytes (bytes-length (car p)) in)
+                             (forward p in)
                              (let loop ()
                                (define v (read-line in))
                                (cond
                                  [(eof-object? v) #f]
-                                 [(multi-end? v) #t]
+                                 [(multi-input-end? v) #t]
                                  [else (loop)])))]
+                          [(multi-line? in) #t]
                           [else #t])))])
       (let loop ()
         (define v (expeditor-read ee #:prompt ">>>"))
         (cond
           [(eof-object? v) (expeditor-close ee)]
+          [(lines? v)
+           (define s (read-multi-line (lines-first v)))
+           (when (string? s)
+             (run s))
+           (loop)]
           [(message? v)
-           (sync preload-evt)
-           (call-with-continuation-prompt
-            (λ ()
-              (parameterize ([running? #t])
-                ((current-chat) (message-content v)))))
+           (run (message-content v))
            (loop)]
           [else
            (call-with-continuation-prompt
