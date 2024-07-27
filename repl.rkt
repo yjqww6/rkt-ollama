@@ -4,7 +4,8 @@
 (define current-chat (make-parameter chat))
 
 (module+ main
-  (require expeditor racket/port racket/cmdline)
+  (require expeditor (submod expeditor configure)
+           racket/port racket/cmdline)
 
   (define no-preload #f)
   (command-line
@@ -29,11 +30,21 @@
   (define (multi-end? str)
     (regexp-match #px"\"\"\"$" str))
   (struct message (content))
+  (define running? (make-parameter #f))
 
   (when (terminal-port? (current-input-port))
     (define ee (expeditor-open '()))
     (expeditor-configure)
     (current-expeditor-color-enabled #f)
+    (expeditor-bind-key!
+     "^C"
+     (λ (ee entry c)
+       (cond
+         [(running?)
+          (ee-reset-entry ee entry c)
+          (break-thread (current-thread))]
+         [else
+          (ee-reset-entry/break ee entry c)])))
     (define ns (namespace-anchor->namespace here))
     
     (parameterize ([current-namespace ns]
@@ -92,13 +103,14 @@
            (sync preload-evt)
            (call-with-continuation-prompt
             (λ ()
-              ((current-chat) (message-content v))))
+              (parameterize ([running? #t])
+                ((current-chat) (message-content v)))))
            (loop)]
           [else
            (call-with-continuation-prompt
             (λ ()
               (call-with-values
-               (λ () (eval v ns))
+               (λ () (parameterize ([running? #t]) (eval v ns)))
                (λ r
                  (for ([v (in-list r)])
                    (unless (void? v)
