@@ -4,7 +4,7 @@
          syntax/parse/define
          racket/string racket/match)
 (provide (all-from-out "private/config.rkt" "private/history.rkt")
-         chat generate last-response undo redo clear)
+         chat generate last-response undo redo clear preload)
 
 (define (call-with-cust thunk)
   (let ([cust (make-custodian)])
@@ -51,6 +51,10 @@
      (display-stats
       (p:chat user output #:assistant-start fake))
      (current-history))))
+
+(define (preload)
+  (parameterize ([current-tools #f])
+    (p:chat/raw '())))
 
 (define last-response (make-parameter #f))
 

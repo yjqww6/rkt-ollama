@@ -6,6 +6,7 @@
 (module+ main
   (require expeditor racket/port racket/cmdline)
 
+  (define no-preload #f)
   (command-line
    #:program "rkt-ollama-repl"
    #:once-each
@@ -13,7 +14,13 @@
    [("-s" "--system") s "system prompt" (current-system s)]
    [("-v" "--verbose") "verbose messages" (current-verbose #t)]
    [("--host") h "ollama host" (current-host h)]
-   [("--port") p "ollama port" (current-port p)])
+   [("--port") p "ollama port" (current-port p)]
+   [("--no-preload") "don't ask to preload the model on startup" (set! no-preload #t)])
+  (define preload-evt
+    (cond
+      [no-preload
+       always-evt]
+      [else (thread preload)]))
   
   (define (command-input? in)
     (regexp-match-peek #px"^\\s*," in))
@@ -82,6 +89,7 @@
         (cond
           [(eof-object? v) (expeditor-close ee)]
           [(message? v)
+           (sync preload-evt)
            (call-with-continuation-prompt
             (λ ()
               ((current-chat) (message-content v))))

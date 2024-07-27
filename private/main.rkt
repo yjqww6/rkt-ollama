@@ -1,7 +1,7 @@
 #lang racket/base
 (require "config.rkt" "history.rkt"
          racket/match net/http-client json racket/port)
-(provide chat generate)
+(provide chat generate chat/raw)
 
 (define (post path data)
   (define-values (status headers chat-port)
@@ -22,7 +22,7 @@
   (post "chat" data))
   
 (define (chat message output
-                      #:assistant-start [fake #f])
+              #:assistant-start [fake #f])
   (define messages
     (append-history 
      (make-system (current-system))
@@ -40,10 +40,13 @@
   (define result
     (begin0
       (for/or ([j (in-port read-json chat-port)])
-        (match-define (hash* ['done done] ['message (hash* ['content content])]) j)
-        (write-string content new-output)
-        (flush-output new-output)
-        (and done j))
+        (match j
+          [(hash* ['done done] ['message (hash* ['content content])])
+           (write-string content new-output)
+           (flush-output new-output)
+           (and done j)]
+          [(hash* ['error err])
+           (error 'chat "~a" err)]))
       (close-input-port chat-port)))
 
   (current-history
@@ -73,8 +76,11 @@
   (define chat-port (post "generate" data))
   (begin0
     (for/or ([j (in-port read-json chat-port)])
-      (match-define (hash* ['done done] ['response content]) j)
-      (write-string content output)
-      (flush-output output)
-      (and done j))
+      (match j
+        [(hash* ['done done] ['response content])
+         (write-string content output)
+         (flush-output output)
+         (and done j)]
+        [(hash* ['error err])
+         (error 'generate "~a" err)]))
     (close-input-port chat-port)))
