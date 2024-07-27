@@ -45,7 +45,6 @@
                            (λ (p)
                              (read-bytes (bytes-length (car p)) in)
                              (define str (port->string in))
-                             (writeln str)
                              (cond
                                [(multi-end? str)
                                 =>
