@@ -1,5 +1,5 @@
 #lang racket/base
-(require "main.rkt" racket/file racket/lazy-require)
+(require "main.rkt" racket/file racket/class racket/lazy-require)
 (define-namespace-anchor here)
 (define current-chat (make-parameter chat))
 
@@ -9,18 +9,29 @@
   (define p (get-file))
   (when p
     (current-image (file->bytes p))))
+(define current-paste-text (make-parameter #f))
+(define (paste)
+  (define t (current-milliseconds))
+  (define c (dynamic-require 'racket/gui/base 'the-clipboard))
+  (cond
+    [(send c get-clipboard-bitmap t)
+     => current-image]
+    [(send c get-clipboard-string t)
+     => current-paste-text]))
 
 (module+ main
   (require expeditor (submod expeditor configure)
            racket/port racket/cmdline)
 
   (define no-preload #f)
+  (current-context-window 8192)
   (command-line
    #:program "rkt-ollama-repl"
    #:once-each
    [("-m" "--model") m "default model" (current-model m)]
    [("-s" "--system") s "system prompt" (current-system s)]
    [("-v" "--verbose") "verbose messages" (current-verbose #t)]
+   [("-c" "--context-window") c "context window size" (current-context-window (string->number c))]
    [("--host") h "ollama host" (current-host h)]
    [("--port") p "ollama port" (current-port p)]
    [("--no-preload") "don't ask to preload the model on startup" (set! no-preload #t)])
@@ -34,11 +45,12 @@
     (regexp-match-peek #px"^\\s*," in))
 
 
-  ;; expeditor seems buggy, use ''' when pasting massive texts
+  ;; expeditor seems buggy, use M^v when paste massive texts
   (define (multi-input? in)
     (regexp-match-peek #px"^\"\"\"" in))
   (define multi-input-end #px"(\r\n|\n|\r)\"\"\"$")
 
+  ;; may reach the limit of type ahead buffer
   (define (multi-line? in)
     (regexp-match-peek #px"^'''" in))
 
@@ -72,14 +84,10 @@
     (call-with-continuation-prompt
      (λ ()
        (parameterize ([running? #t])
+         (define (take c)
+           (begin0 (c) (c #f)))
          ((current-chat)
-          (cond
-            [(current-image)
-             =>
-             (λ (img)
-               (current-image #f)
-               (list s img))]
-            [else s]))))))
+          (list s (take current-paste-text) (take current-image)))))))
 
   (define (reader orig)
     (lambda (in)
@@ -140,6 +148,12 @@
        (upload-image)
        (set! uploaded! #t)
        #f))
+    (expeditor-bind-key!
+     "\\ev"
+     (λ (ee entry c)
+       (paste)
+       (set! uploaded! #t)
+       #f))
     
     (parameterize ([current-namespace ns]
                    [current-expeditor-reader
@@ -149,7 +163,11 @@
       (let loop ()
         (define v (expeditor-read
                    ee
-                   #:prompt (if (current-image) "img>>>" ">>>")))
+                   #:prompt
+                   (string-append
+                    (if (current-paste-text) "text " "")
+                    (if (current-image) "img " "")
+                    ">>>")))
         (cond
           [(eof-object? v) (expeditor-close ee)]
           [(uploaded? v) (loop)]
