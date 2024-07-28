@@ -37,8 +37,7 @@
   ;; expeditor seems buggy, use ''' when pasting massive texts
   (define (multi-input? in)
     (regexp-match-peek #px"^\"\"\"" in))
-  (define (multi-input-end? str)
-    (regexp-match #px"\"\"\"$" str))
+  (define multi-input-end #px"(\r\n|\n|\r)\"\"\"$")
 
   (define (multi-line? in)
     (regexp-match-peek #px"^'''" in))
@@ -47,7 +46,7 @@
     (read-bytes (bytes-length (car p)) in))
   (struct message (content))
   (struct lines (first))
-  
+
   (define uploaded! #f)
   (struct uploaded ())
 
@@ -82,9 +81,49 @@
                (list s img))]
             [else s]))))))
 
+  (define (reader orig)
+    (lambda (in)
+      (cond
+        [uploaded!
+         (set! uploaded! #f)
+         (uploaded)]
+        [(eof-object? (peek-byte in)) eof]
+        [(command-input? in)
+         =>
+         (λ (p)
+           (forward p in)
+           (orig in))]
+        [(multi-input? in)
+         =>
+         (λ (p)
+           (forward p in)
+           (message (car (regexp-split multi-input-end (port->string in)))))]
+        [(multi-line? in)
+         =>
+         (λ (p)
+           (forward p in)
+           (lines (port->string in)))]
+        [else
+         (message (port->string in))])))
+  (define (ready orig)
+    (lambda (in)
+      (cond
+        [(command-input? in)
+         =>
+         (λ (p)
+           (forward p in)
+           (orig in))]
+        [(multi-input? in)
+         =>
+         (λ (p)
+           (forward p in)
+           (regexp-match? multi-input-end in))]
+        [(multi-line? in) #t]
+        [else #t])))
+
   (when (terminal-port? (current-input-port))
-    (define ee (expeditor-open '()))
     (expeditor-configure)
+    (define ee (expeditor-open '()))
     (current-expeditor-color-enabled #f)
     (expeditor-bind-key!
      "^C"
@@ -96,7 +135,7 @@
          [else
           (ee-reset-entry/break ee entry c)])))
     (expeditor-bind-key!
-     "^I"
+     "\\ei"
      (λ (ee entry c)
        (upload-image)
        (set! uploaded! #t)
@@ -104,61 +143,9 @@
     
     (parameterize ([current-namespace ns]
                    [current-expeditor-reader
-                    (let ([orig (current-expeditor-reader)])
-                      (lambda (in)
-                        (cond
-                          [uploaded!
-                           (set! uploaded! #f)
-                           (uploaded)]
-                          [(command-input? in)
-                           =>
-                           (λ (p)
-                             (forward p in)
-                             (orig in))]
-                          [(eof-object? (peek-byte in)) eof]
-                          [(multi-input? in)
-                           =>
-                           (λ (p)
-                             (forward p in)
-                             (define str (port->string in))
-                             (cond
-                               [(multi-input-end? str)
-                                =>
-                                (λ (p)
-                                  (message
-                                   (substring
-                                    str 0
-                                    (- (string-length str)
-                                       (string-length (car p))))))]
-                               [else (message str)]))]
-                          [(multi-line? in)
-                           =>
-                           (λ (p)
-                             (forward p in)
-                             (lines (port->string in)))]
-                          [else
-                           (message (port->string in))])))]
+                    (reader (current-expeditor-reader))]
                    [current-expeditor-ready-checker
-                    (let ([orig (current-expeditor-ready-checker)])
-                      (lambda (in)
-                        (cond
-                          [(command-input? in)
-                           =>
-                           (λ (p)
-                             (forward p in)
-                             (orig in))]
-                          [(multi-input? in)
-                           =>
-                           (λ (p)
-                             (forward p in)
-                             (let loop ()
-                               (define v (read-line in))
-                               (cond
-                                 [(eof-object? v) #f]
-                                 [(multi-input-end? v) #t]
-                                 [else (loop)])))]
-                          [(multi-line? in) #t]
-                          [else #t])))])
+                    (ready (current-expeditor-ready-checker))])
       (let loop ()
         (define v (expeditor-read
                    ee
