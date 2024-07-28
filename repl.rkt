@@ -4,12 +4,15 @@
 (define current-chat (make-parameter chat))
 
 (define current-image (make-parameter #f))
+(define current-paste-text (make-parameter #f))
+(define paste-text-as-prefix? (make-parameter #t))
+
 (lazy-require [racket/gui/base (get-file)])
 (define (upload-image)
   (define p (get-file))
   (when p
     (current-image (file->bytes p))))
-(define current-paste-text (make-parameter #f))
+
 (define (paste)
   (define t (current-milliseconds))
   (define c (dynamic-require 'racket/gui/base 'the-clipboard))
@@ -87,7 +90,10 @@
          (define (take c)
            (begin0 (c) (c #f)))
          ((current-chat)
-          (list s (take current-paste-text) (take current-image)))))))
+          (list (and (paste-text-as-prefix?) (take current-paste-text))
+                s
+                (and (not (paste-text-as-prefix?)) (take current-paste-text))
+                (take current-image)))))))
 
   (define (reader orig)
     (lambda (in)
