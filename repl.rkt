@@ -149,7 +149,7 @@
       (let loop ()
         (define v (expeditor-read
                    ee
-                   #:prompt (if (current-image) "img>>> " ">>> ")))
+                   #:prompt (if (current-image) "img>>>" ">>>")))
         (cond
           [(eof-object? v) (expeditor-close ee)]
           [(uploaded? v) (loop)]
