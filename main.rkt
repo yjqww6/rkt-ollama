@@ -25,6 +25,7 @@
                              (and (not (null? imgs))
                                   (map get-image (reverse imgs))))]
       [(string? (car items)) (loop (cdr items) (cons (car items) strs) imgs)]
+      [(list? (car items)) (loop (append (car items) (cdr items)) strs imgs)]
       [else (loop (cdr items) strs (cons (car items) imgs))])))
 
 (define (build-message role items)

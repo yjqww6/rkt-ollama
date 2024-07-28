@@ -22,6 +22,8 @@
   (cond
     [(path? img)
      (bytes->string/latin-1 (base64-encode (file->bytes img) ""))]
+    [(bytes? img)
+     (bytes->string/latin-1 (base64-encode img ""))]
     [else
      (cond
        [(is-a? img (bitmap)) (bitmap->bytes img)]

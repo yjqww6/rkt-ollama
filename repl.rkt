@@ -1,7 +1,14 @@
 #lang racket/base
-(require "main.rkt")
+(require "main.rkt" racket/file racket/lazy-require)
 (define-namespace-anchor here)
 (define current-chat (make-parameter chat))
+
+(define current-image (make-parameter #f))
+(lazy-require [racket/gui/base (get-file)])
+(define (upload-image)
+  (define p (get-file))
+  (when p
+    (current-image (file->bytes p))))
 
 (module+ main
   (require expeditor (submod expeditor configure)
@@ -40,6 +47,10 @@
     (read-bytes (bytes-length (car p)) in))
   (struct message (content))
   (struct lines (first))
+  
+  (define uploaded! #f)
+  (struct uploaded ())
+
   (define running? (make-parameter #f))
 
   (define (read-multi-line first)
@@ -56,6 +67,21 @@
            (write-string v o)
            (f)]))))
 
+  (define ns (namespace-anchor->namespace here))
+  (define (run s)
+    (sync preload-evt)
+    (call-with-continuation-prompt
+     (λ ()
+       (parameterize ([running? #t])
+         ((current-chat)
+          (cond
+            [(current-image)
+             =>
+             (λ (img)
+               (current-image #f)
+               (list s img))]
+            [else s]))))))
+
   (when (terminal-port? (current-input-port))
     (define ee (expeditor-open '()))
     (expeditor-configure)
@@ -69,19 +95,21 @@
           (break-thread (current-thread))]
          [else
           (ee-reset-entry/break ee entry c)])))
-    (define ns (namespace-anchor->namespace here))
-    (define (run s)
-      (sync preload-evt)
-      (call-with-continuation-prompt
-       (λ ()
-         (parameterize ([running? #t])
-           ((current-chat) s)))))
+    (expeditor-bind-key!
+     "^I"
+     (λ (ee entry c)
+       (upload-image)
+       (set! uploaded! #t)
+       #f))
     
     (parameterize ([current-namespace ns]
                    [current-expeditor-reader
                     (let ([orig (current-expeditor-reader)])
                       (lambda (in)
                         (cond
+                          [uploaded!
+                           (set! uploaded! #f)
+                           (uploaded)]
                           [(command-input? in)
                            =>
                            (λ (p)
@@ -132,9 +160,12 @@
                           [(multi-line? in) #t]
                           [else #t])))])
       (let loop ()
-        (define v (expeditor-read ee #:prompt ">>>"))
+        (define v (expeditor-read
+                   ee
+                   #:prompt (if (current-image) "img>>> " ">>> ")))
         (cond
           [(eof-object? v) (expeditor-close ee)]
+          [(uploaded? v) (loop)]
           [(lines? v)
            (define s (read-multi-line (lines-first v)))
            (when (string? s)
