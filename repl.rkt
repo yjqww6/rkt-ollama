@@ -5,7 +5,7 @@
 
 (define current-image (make-parameter #f))
 (define current-paste-text (make-parameter #f))
-(define paste-text-as-prefix? (make-parameter #t))
+(define current-paste-text-as-prefix? (make-parameter #t))
 
 (lazy-require [racket/gui/base (get-file)])
 (define (upload-image)
@@ -21,6 +21,17 @@
      => current-image]
     [(send c get-clipboard-string t)
      => current-paste-text]))
+
+(define (default-make-prompt prompt #:paste-text paste-text)
+  (cond
+    [(not paste-text) prompt]
+    [else
+     (define p (list "```" paste-text "```"))
+     (if (current-paste-text-as-prefix?)
+         (list p prompt)
+         (list prompt p))]))
+
+(define current-make-prompt (make-parameter default-make-prompt))
 
 (module+ main
   (require expeditor (submod expeditor configure)
@@ -90,9 +101,7 @@
          (define (take c)
            (begin0 (c) (c #f)))
          ((current-chat)
-          (list (and (paste-text-as-prefix?) (take current-paste-text))
-                s
-                (and (not (paste-text-as-prefix?)) (take current-paste-text))
+          (list ((current-make-prompt) s #:paste-text (take current-paste-text))
                 (take current-image)))))))
 
   (define (reader orig)
