@@ -1,7 +1,7 @@
 #lang racket/base
-(require "main.rkt" racket/file racket/class racket/lazy-require)
+(require "main.rkt" racket/file racket/class racket/match racket/system racket/port
+         racket/lazy-require)
 (define-namespace-anchor here)
-(define current-chat (make-parameter chat))
 
 (define current-image (make-parameter #f))
 (define current-paste-text (make-parameter #f))
@@ -32,6 +32,31 @@
          (list prompt p))]))
 
 (define current-make-prompt (make-parameter default-make-prompt))
+
+(define current-chat (make-parameter chat))
+
+(define current-say-command (make-parameter "say"))
+(define (say str)
+  (match-define (list #f #f pid #f f)
+    (process/ports
+     (open-output-nowhere) (open-input-string str) (open-output-nowhere)
+     (current-say-command)))
+  (f 'wait))
+
+(define say-chat
+  (make-keyword-procedure
+   (λ (kw kw-args . rest)
+     (define-values (in out) (make-pipe))
+     (with-cust _
+       (define thr
+         (thread
+          (λ ()
+            (for ([line (in-lines in)])
+              (say line)))))
+       (parameterize ([current-chat-output-port (combine-output (current-chat-output-port) out)])
+         (keyword-apply chat kw kw-args rest)
+         (close-output-port out)
+         (thread-wait thr))))))
 
 (module+ main
   (require expeditor (submod expeditor configure)

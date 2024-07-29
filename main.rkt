@@ -4,7 +4,8 @@
          syntax/parse/define
          racket/string racket/match)
 (provide (all-from-out "private/config.rkt" "private/history.rkt")
-         chat generate last-response undo redo clear preload)
+         chat generate last-response undo redo clear preload current-chat-output-port
+         with-cust)
 
 (define (call-with-cust thunk)
   (let ([cust (make-custodian)])
@@ -35,18 +36,24 @@
               'content content
               'images images))
 
-(define (chat #:output [output (current-output-port)] #:start [fake #f] . items)
+(define current-chat-output-port
+  (make-derived-parameter
+   (make-parameter #f)
+   values
+   (λ (v) (or v (current-output-port)))))
+
+(define (chat #:output [output (current-chat-output-port)] #:start [fake #f] . items)
   (with-cust _
     (display-stats
      (p:chat (build-message "user" items) output #:assistant-start fake))))
 
-(define (generate #:output [output (current-output-port)] . items)
+(define (generate #:output [output (current-chat-output-port)] . items)
   (define-values (prompt images) (collect items))
   (with-cust _
     (display-stats
      (p:generate prompt output #:images images))))
 
-(define (redo #:output [output (current-output-port)] #:start [fake #f])
+(define (redo #:output [output (current-chat-output-port)] #:start [fake #f])
   (match-define (list history ... user assistant) (current-history))
   (current-history
    (parameterize ([current-history history])
