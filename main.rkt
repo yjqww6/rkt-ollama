@@ -4,7 +4,8 @@
          syntax/parse/define
          racket/string racket/match)
 (provide (all-from-out "private/config.rkt" "private/history.rkt")
-         chat generate last-response undo redo clear preload current-chat-output-port
+         chat generate last-response undo redo clear preload
+         current-chat-output-port current-assistant-start
          with-cust)
 
 (define (call-with-cust thunk)
@@ -42,7 +43,11 @@
    values
    (λ (v) (or v (current-output-port)))))
 
-(define (chat #:output [output (current-chat-output-port)] #:start [fake #f] . items)
+(define current-assistant-start (make-parameter #f))
+
+(define (chat #:output [output (current-chat-output-port)]
+              #:start [fake (current-assistant-start)]
+              . items)
   (with-cust _
     (display-stats
      (p:chat (build-message "user" items) output #:assistant-start fake))))

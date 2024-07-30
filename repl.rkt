@@ -58,6 +58,8 @@
          (close-output-port out)
          (thread-wait thr))))))
 
+(define current-output-prefix (make-parameter #f))
+
 (module+ main
   (require expeditor (submod expeditor configure)
            racket/port racket/cmdline)
@@ -122,13 +124,19 @@
     (sync preload-evt)
     (call-with-continuation-prompt
      (λ ()
-       (parameterize ([running? #t])
-         (define (take c)
-           (begin0 (c) (c #f)))
+       (define (take c)
+         (begin0 (c) (c #f)))
+       (parameterize ([running? #t]
+                      [current-assistant-start (take current-output-prefix)])
          ((current-chat)
           (list ((current-make-prompt) s #:paste-text (take current-paste-text))
                 (take current-image)))))))
 
+  ;; prefixes
+  ;; , starts a racket command
+  ;; """ starts multi line block in expeditor without triggering shortcuts
+  ;; ''' starts multi line block with read-line
+  ;;; ^ starts a output prefix
   (define (reader orig)
     (lambda (in)
       (cond
@@ -136,6 +144,10 @@
          (set! uploaded! #f)
          (uploaded)]
         [(eof-object? (peek-byte in)) eof]
+        [(eqv? #\^ (peek-char in))
+         (read-char in)
+         (current-output-prefix (port->string in))
+         (uploaded)]
         [(command-input? in)
          =>
          (λ (p)
@@ -153,6 +165,7 @@
            (lines (port->string in)))]
         [else
          (message (port->string in))])))
+
   (define (ready orig)
     (lambda (in)
       (cond
@@ -207,6 +220,7 @@
                    (string-append
                     (if (current-paste-text) "text " "")
                     (if (current-image) "img " "")
+                    (if (current-output-prefix) "pre " "")
                     ">>>")))
         (cond
           [(eof-object? v) (expeditor-close ee)]
