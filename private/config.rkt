@@ -12,20 +12,6 @@
        [v (hash-set h k v)]
        [else h])]))
 
-(define-syntax-parse-rule (define-options C [Param Key] ...+)
-  (begin
-    (define Param (make-parameter #f))
-    ...
-    (define C
-      (case-lambda
-        [()
-         (hash-param
-          (~@ 'Key (Param))
-          ...)]
-        [(opt)
-         (Param (and opt (hash-ref opt 'Key #f)))
-         ...]))))
-
 (define current-model (make-parameter "gemma2"))
 (define current-system (make-parameter #f))
 (define current-tools (make-parameter #f))
@@ -35,7 +21,22 @@
 (define current-port (make-parameter 11434))
 (define current-verbose (make-parameter #f))
 
-(define-options current-options
+(define current-options (make-parameter #f))
+
+(define (make-option key)
+  (make-derived-parameter
+   current-options
+   (λ (v) (hash-set (or (current-options) (hasheq)) key v))
+   (λ (v) (cond
+            [(current-options)
+             =>
+             (λ (c) (hash-ref c key #f))]
+            [else #f]))))
+
+(define-syntax-parse-rule (define-options [Name:id Key:id] ...)
+  (begin (define Name (make-option 'Key)) ...))
+
+(define-options
   [current-context-window num_ctx]
   [current-temperature temperature]
   [current-repeat-penalty repeat_penalty]
