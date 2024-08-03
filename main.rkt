@@ -4,7 +4,7 @@
          syntax/parse/define
          racket/string racket/match)
 (provide (all-from-out "private/config.rkt" "private/history.rkt")
-         chat generate undo redo clear preload
+         chat generate undo redo continue clear preload
          current-chat-output-port current-assistant-start
          with-cust)
 
@@ -60,6 +60,14 @@
 
 (define (redo #:output [output (current-chat-output-port)] #:start [fake #f])
   (match-define (list history ... user assistant) (current-history))
+  (current-history
+   (parameterize ([current-history history])
+     (p:chat user output #:assistant-start fake)
+     (current-history))))
+
+(define (continue #:output [output (current-chat-output-port)])
+  (match-define (list history ... user (hash* ['role "assistant"] ['content fake]))
+    (current-history))
   (current-history
    (parameterize ([current-history history])
      (p:chat user output #:assistant-start fake)

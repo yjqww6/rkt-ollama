@@ -33,7 +33,15 @@
 
 (define current-make-prompt (make-parameter default-make-prompt))
 
-(define current-chat (make-parameter chat))
+(define (default-chat s)
+  (define (take c)
+    (begin0 (c) (c #f)))
+  (parameterize ([current-assistant-start (take current-output-prefix)])
+    (chat (list ((current-make-prompt) s #:paste-text (take current-paste-text))
+                (take current-image)))
+    (newline)))
+
+(define current-chat (make-parameter default-chat))
 
 (define current-say-command (make-parameter "say"))
 (define (say str)
@@ -44,19 +52,18 @@
   (f 'wait))
 
 (define say-chat
-  (make-keyword-procedure
-   (λ (kw kw-args . rest)
-     (define-values (in out) (make-pipe))
-     (with-cust _
-       (define thr
-         (thread
-          (λ ()
-            (for ([line (in-lines in)])
-              (say line)))))
-       (parameterize ([current-chat-output-port (combine-output (current-chat-output-port) out)])
-         (keyword-apply chat kw kw-args rest)
-         (close-output-port out)
-         (thread-wait thr))))))
+  (λ (s)
+    (define-values (in out) (make-pipe))
+    (with-cust _
+      (define thr
+        (thread
+         (λ ()
+           (for ([line (in-lines in)])
+             (say line)))))
+      (parameterize ([current-chat-output-port (combine-output (current-chat-output-port) out)])
+        (default-chat s)
+        (close-output-port out)
+        (thread-wait thr)))))
 
 (define current-output-prefix (make-parameter #f))
 
@@ -120,18 +127,21 @@
            (f)]))))
 
   (define ns (namespace-anchor->namespace here))
-  (define (run s)
+  (define (run thunk)
     (sync preload-evt)
     (call-with-continuation-prompt
      (λ ()
-       (define (take c)
-         (begin0 (c) (c #f)))
-       (parameterize ([running? #t]
-                      [current-assistant-start (take current-output-prefix)])
-         ((current-chat)
-          (list ((current-make-prompt) s #:paste-text (take current-paste-text))
-                (take current-image)))
-         (newline)))))
+       (parameterize ([running? #t])
+         (call-with-continuation-prompt
+          thunk
+          break-prompt-tag
+          (λ (cc)
+            (newline)
+            (display "Accept as history[y/n]:")
+            (when (regexp-match? #px"^\\s*y" (read-line))
+              (cc))))))))
+  (define (run-chat s)
+    (run (λ () ((current-chat) s))))
 
   ;; prefixes
   ;; , starts a racket command
@@ -199,7 +209,7 @@
           (ee-reset-entry ee entry c)
           (break-thread (current-thread))]
          [else
-          (ee-reset-entry/break ee entry c)])))
+          (ee-reset-entry ee entry c)])))
     (expeditor-bind-key!
      "\\ei"
      (λ (ee entry c)
@@ -233,16 +243,16 @@
           [(lines? v)
            (define s (read-multi-line (lines-first v)))
            (when (string? s)
-             (run s))
+             (run-chat s))
            (loop)]
           [(message? v)
-           (run (message-content v))
+           (run-chat (message-content v))
            (loop)]
           [else
            (call-with-continuation-prompt
             (λ ()
               (call-with-values
-               (λ () (parameterize ([running? #t]) (eval v ns)))
+               (λ () (run (λ () (eval v ns))))
                (λ r
                  (for ([v (in-list r)])
                    (unless (void? v)

@@ -20,6 +20,7 @@
 (define current-host (make-parameter "localhost"))
 (define current-port (make-parameter 11434))
 (define current-verbose (make-parameter #f))
+(define break-prompt-tag (make-continuation-prompt-tag))
 
 (define current-options (make-parameter #f))
 

@@ -40,15 +40,22 @@
   
   (define result
     (begin0
-      (for/or ([j (in-port read-json chat-port)])
-        (log-network-trace (network:recv j))
-        (match j
-          [(hash* ['done done] ['message (hash* ['content content])])
-           (write-string content new-output)
-           (flush-output new-output)
-           (and done j)]
-          [(hash* ['error err])
-           (error 'chat "~a" err)]))
+      (with-handlers* ([(λ (e) (and (exn:break? e)
+                                    (continuation-prompt-available? break-prompt-tag)))
+                        (λ (e)
+                          (call/cc
+                           (λ (cc)
+                             (abort-current-continuation break-prompt-tag cc)))
+                          (hasheq 'message (fake-assistant "")))])
+        (for/or ([j (in-port read-json chat-port)])
+          (log-network-trace (network:recv j))
+          (match j
+            [(hash* ['done done] ['message (hash* ['content content])])
+             (write-string content new-output)
+             (flush-output new-output)
+             (and done j)]
+            [(hash* ['error err])
+             (error 'chat "~a" err)])))
       (close-input-port chat-port)))
   (perf-trace result)
   (current-history
