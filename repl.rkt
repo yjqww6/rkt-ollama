@@ -149,6 +149,10 @@
          (read-char in)
          (current-output-prefix (port->string in))
          (uploaded)]
+        [(eqv? #\$ (peek-char in))
+         (read-char in)
+         (current-system (port->string in))
+         (uploaded)]
         [(command-input? in)
          =>
          (λ (p)
