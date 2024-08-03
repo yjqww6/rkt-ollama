@@ -4,7 +4,7 @@
          syntax/parse/define
          racket/string racket/match)
 (provide (all-from-out "private/config.rkt" "private/history.rkt")
-         chat generate last-response undo redo clear preload
+         chat generate undo redo clear preload
          current-chat-output-port current-assistant-start
          with-cust)
 
@@ -49,55 +49,23 @@
               #:start [fake (current-assistant-start)]
               . items)
   (with-cust _
-    (display-stats
-     (p:chat (build-message "user" items) output #:assistant-start fake))))
+    (p:chat (build-message "user" items) output #:assistant-start fake)
+    (void)))
 
 (define (generate #:output [output (current-chat-output-port)] . items)
   (define-values (prompt images) (collect items))
   (with-cust _
-    (display-stats
-     (p:generate prompt output #:images images))))
+    (p:generate prompt output #:images images)
+    (void)))
 
 (define (redo #:output [output (current-chat-output-port)] #:start [fake #f])
   (match-define (list history ... user assistant) (current-history))
   (current-history
    (parameterize ([current-history history])
-     (display-stats
-      (p:chat user output #:assistant-start fake))
+     (p:chat user output #:assistant-start fake)
      (current-history))))
 
 (define (preload)
   (parameterize ([current-tools #f])
-    (p:chat/raw '())))
-
-(define last-response (make-parameter #f))
-
-(define (display-stats j [output (current-output-port)])
-  (last-response j)
-  (newline output)
-  (define (->seconds a)
-    (/ a 1e9))
-  (when (current-verbose)
-    (match j
-      [(hash* ['total_duration (app ->seconds total_duration)]
-              ['load_duration (app ->seconds load_duration)]
-              ['prompt_eval_duration (app ->seconds prompt_eval_duration)]
-              ['eval_duration (app ->seconds eval_duration)]
-              ['prompt_eval_count prompt_eval_count]
-              ['eval_count eval_count])
-       
-       (fprintf output
-                "prompt tokens: ~a~%eval tokens: ~a~%"
-                prompt_eval_count eval_count)
-       (fprintf output
-                "elapsed: ~a~%load: ~a~%prompt: ~a~%response: ~a~%"
-                total_duration
-                load_duration
-                prompt_eval_duration
-                eval_duration)
-       (fprintf output "prompt ~a token/s~%eval ~a token/s~%"
-                (/ prompt_eval_count
-                   prompt_eval_duration)
-                (/ eval_count
-                   eval_duration))]
-      [else (void)])))
+    (p:chat/raw '())
+    (void)))

@@ -1,9 +1,10 @@
 #lang racket/base
-(require "config.rkt" "history.rkt"
+(require "config.rkt" "history.rkt" "log.rkt"
          racket/match net/http-client json racket/port)
-(provide chat generate chat/raw)
+(provide chat generate chat/raw post)
 
 (define (post path data)
+  (log-network-trace (network:send data))
   (define-values (status headers chat-port)
     (http-sendrecv
      (current-host) (string-append "/api/" path)
@@ -40,6 +41,7 @@
   (define result
     (begin0
       (for/or ([j (in-port read-json chat-port)])
+        (log-network-trace (network:recv j))
         (match j
           [(hash* ['done done] ['message (hash* ['content content])])
            (write-string content new-output)
@@ -48,14 +50,13 @@
           [(hash* ['error err])
            (error 'chat "~a" err)]))
       (close-input-port chat-port)))
-
+  (perf-trace result)
   (current-history
    (append-history
     (current-history)
     message
     (hash-set (hash-ref result 'message)
-              'content (get-output-string sp))))
-  result)
+              'content (get-output-string sp)))))
 
 (define (generate prompt output
                   #:images [images #f]
@@ -74,13 +75,27 @@
                 'template template
                 'context context))
   (define chat-port (post "generate" data))
-  (begin0
-    (for/or ([j (in-port read-json chat-port)])
-      (match j
-        [(hash* ['done done] ['response content])
-         (write-string content output)
-         (flush-output output)
-         (and done j)]
-        [(hash* ['error err])
-         (error 'generate "~a" err)]))
-    (close-input-port chat-port)))
+  (define result
+    (begin0
+      (for/or ([j (in-port read-json chat-port)])
+        (match j
+          [(hash* ['done done] ['response content])
+           (write-string content output)
+           (flush-output output)
+           (and done j)]
+          [(hash* ['error err])
+           (error 'generate "~a" err)]))
+      (close-input-port chat-port)))
+  (perf-trace result)
+  result)
+
+(define (perf-trace j)
+  (match j
+    [(hash* ['total_duration total_duration]
+            ['load_duration load_duration]
+            ['prompt_eval_duration prompt_eval_duration]
+            ['eval_duration eval_duration]
+            ['prompt_eval_count prompt_eval_count]
+            ['eval_count eval_count])
+     (log-perf-trace (perf prompt_eval_count eval_count prompt_eval_duration eval_duration))]
+    [else (void)]))

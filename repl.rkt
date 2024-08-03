@@ -130,7 +130,8 @@
                       [current-assistant-start (take current-output-prefix)])
          ((current-chat)
           (list ((current-make-prompt) s #:paste-text (take current-paste-text))
-                (take current-image)))))))
+                (take current-image)))
+         (newline)))))
 
   ;; prefixes
   ;; , starts a racket command
