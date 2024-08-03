@@ -33,9 +33,12 @@
 
 (define current-make-prompt (make-parameter default-make-prompt))
 
+(define preload-evt (box always-evt))
+
 (define (default-chat s)
   (define (take c)
     (begin0 (c) (c #f)))
+  (sync (unbox preload-evt))
   (parameterize ([current-assistant-start (take current-output-prefix)])
     (chat (list ((current-make-prompt) s #:paste-text (take current-paste-text))
                 (take current-image)))
@@ -83,11 +86,11 @@
    [("--host") h "ollama host" (current-host h)]
    [("--port") p "ollama port" (current-port p)]
    [("--no-preload") "don't ask to preload the model on startup" (set! no-preload #t)])
-  (define preload-evt
-    (cond
-      [no-preload
-       always-evt]
-      [else (thread preload)]))
+
+  (unless no-preload
+    (set-box! preload-evt
+              (handle-evt (thread preload)
+                          (λ (v) (set-box! preload-evt always-evt)))))
   
   (define (command-input? in)
     (regexp-match-peek #px"^\\s*," in))
@@ -128,7 +131,6 @@
 
   (define ns (namespace-anchor->namespace here))
   (define (run thunk)
-    (sync preload-evt)
     (call-with-continuation-prompt
      (λ ()
        (parameterize ([running? #t])

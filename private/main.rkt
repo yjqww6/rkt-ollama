@@ -1,15 +1,15 @@
 #lang racket/base
 (require "config.rkt" "history.rkt" "log.rkt"
          racket/match net/http-client json racket/port)
-(provide chat generate chat/raw post)
+(provide chat generate chat/raw embeddings list-models)
 
-(define (post path data)
+(define (send path data #:method [method "POST"])
   (log-network-trace (network:send data))
   (define-values (status headers chat-port)
     (http-sendrecv
      (current-host) (string-append "/api/" path)
-     #:port (current-port) #:method "POST"
-     #:data (jsexpr->bytes data)))
+     #:port (current-port) #:method method
+     #:data (and data (jsexpr->bytes data))))
   chat-port)
 
 (define (chat/raw messages)
@@ -20,7 +20,7 @@
      'tools (current-tools)
      'stream (box (current-stream))
      'options (current-options)))
-  (post "chat" data))
+  (send "chat" data))
   
 (define (chat message output
               #:assistant-start [fake #f])
@@ -81,7 +81,7 @@
                 'raw raw
                 'template template
                 'context context))
-  (define chat-port (post "generate" data))
+  (define chat-port (send "generate" data))
   (define result
     (begin0
       (for/or ([j (in-port read-json chat-port)])
@@ -106,3 +106,23 @@
             ['eval_count eval_count])
      (log-perf-trace (perf prompt_eval_count eval_count prompt_eval_duration eval_duration))]
     [else (void)]))
+
+(define (embeddings prompt)
+  (define data
+    (hash-param
+     'model (current-model)
+     'input prompt))
+  (define chat-port (send "embed" data))
+  (define j (begin0 (read-json chat-port) (close-input-port chat-port)))
+  (log-network-trace (network:recv j))
+  (hash-ref j 'embeddings))
+
+(define (list-models [detailed? #f])
+  (define chat-port (send "tags" #f #:method "GET"))
+  (define j (begin0 (read-json chat-port) (close-input-port chat-port)))
+  (log-network-trace (network:recv j))
+  (define models (hash-ref j 'models))
+  (cond
+    [detailed? models]
+    [else (for/list ([m (in-list models)])
+            (hash-ref m 'model))]))
