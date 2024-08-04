@@ -47,13 +47,14 @@
                            (λ (cc)
                              (abort-current-continuation break-prompt-tag cc)))
                           (hasheq 'message (fake-assistant "")))])
-        (for/or ([j (in-port read-json chat-port)])
+        (for/last ([j (in-port read-json chat-port)]
+                   #:final (hash-ref j 'done #f))
           (log-network-trace (network:recv j))
           (match j
-            [(hash* ['done done] ['message (hash* ['content content])])
+            [(hash* ['message (hash* ['content content])])
              (write-string content new-output)
              (flush-output new-output)
-             (and done j)]
+             j]
             [(hash* ['error err])
              (error 'chat "~a" err)])))
       (close-input-port chat-port)))

@@ -1,9 +1,9 @@
 #lang racket/base
-(require "private/config.rkt" "private/history.rkt" "private/image.rkt"
+(require "private/config.rkt" "private/history.rkt" "private/image.rkt" "private/log.rkt"
          (prefix-in p: "private/main.rkt")
          syntax/parse/define
          racket/string racket/match)
-(provide (all-from-out "private/config.rkt" "private/history.rkt")
+(provide (all-from-out "private/config.rkt" "private/history.rkt" "private/log.rkt")
          chat generate undo redo continue clear preload
          current-chat-output-port current-assistant-start
          with-cust)
