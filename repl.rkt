@@ -74,6 +74,7 @@
   (require expeditor (submod expeditor configure)
            racket/port racket/cmdline)
 
+  (port-count-lines! (current-output-port))
   (define no-preload #f)
   (current-context-window 8192)
   (command-line
