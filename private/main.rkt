@@ -19,7 +19,8 @@
      'messages messages
      'tools (current-tools)
      'stream (box (current-stream))
-     'options (current-options)))
+     'options (current-options)
+     'format (current-response-format)))
   (send "chat" data))
   
 (define (chat message output
@@ -81,7 +82,8 @@
                 'stream (box (current-stream))
                 'raw raw
                 'template template
-                'context context))
+                'context context
+                'format (current-response-format)))
   (define chat-port (send "generate" data))
   (define result
     (begin0
