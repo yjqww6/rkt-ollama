@@ -1,6 +1,7 @@
 #lang racket/base
 (require "main.rkt" racket/file racket/class racket/match racket/system racket/port
          racket/lazy-require)
+(provide (all-defined-out) (all-from-out "main.rkt"))
 (define-namespace-anchor here)
 
 (define current-image (make-parameter #f))
@@ -14,8 +15,8 @@
     (current-image (file->bytes p))))
 
 (define (paste)
-  (define t (current-milliseconds))
   (define c (dynamic-require 'racket/gui/base 'the-clipboard))
+  (define t (current-milliseconds))
   (cond
     [(send c get-clipboard-bitmap t)
      => current-image]
