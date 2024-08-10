@@ -73,6 +73,7 @@
 (module+ main
   (require expeditor (submod expeditor configure)
            racket/port racket/cmdline)
+  (define ns (namespace-anchor->namespace here))
 
   (port-count-lines! (current-output-port))
   (define no-preload #f)
@@ -86,7 +87,9 @@
    [("-c" "--context-window") c "context window size" (current-context-window (string->number c))]
    [("--host") h "ollama host" (current-host h)]
    [("--port") p "ollama port" (current-port p)]
-   [("--no-preload") "don't ask to preload the model on startup" (set! no-preload #t)])
+   [("--no-preload") "don't ask to preload the model on startup" (set! no-preload #t)]
+   #:multi
+   [("-r" "--require") file "required file" (namespace-require file ns)])
 
   (unless no-preload
     (set-box! preload-evt
@@ -130,7 +133,6 @@
            (write-string v o)
            (f)]))))
 
-  (define ns (namespace-anchor->namespace here))
   (define (run thunk)
     (call-with-continuation-prompt
      (λ ()
