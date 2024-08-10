@@ -1,8 +1,8 @@
 #lang racket/base
 (require "config.rkt" "history.rkt" "log.rkt"
-         racket/match net/http-client json)
+         racket/match racket/generator net/http-client json)
 (provide  generate chat response? close-response
-          chat/history chat/output generate/output
+          chat/history/output chat/history generate/output
           embeddings list-models)
 
 (struct response (port)
@@ -15,8 +15,14 @@
        j)
      (response-port resp))))
 
+(struct response/producer response (proc)
+  #:property prop:sequence
+  (λ (resp)
+    (in-producer (response/producer-proc resp) eof-object?)))
+
 (define (close-response resp)
-  (close-input-port (response-port resp)))
+  (cond
+    [(response-port resp) => close-input-port]))
 
 (define (send path data #:method [method "POST"])
   (log-network-trace (network:send data))
@@ -38,8 +44,8 @@
      'format (current-response-format)))
   (response (send "chat" data)))
 
-(define (chat/history message proc #:before [before #f] #:after [after #f]
-                      #:assistant-start [fake #f])
+(define (chat-with-history message proc #:before [before #f] #:after [after #f]
+                           #:assistant-start [fake #f])
   (define messages
     (append-history 
      (make-system (current-system))
@@ -50,7 +56,7 @@
   (define resp (chat messages))
   (when fake
     (write-string fake sp))
-  (when before (before))
+  (when before (before resp))
   (define result
     (with-handlers* ([(λ (e) (and (exn:break? e)
                                   (continuation-prompt-available? break-prompt-tag)))
@@ -68,8 +74,7 @@
            j]
           [(hash* ['error err])
            (error 'chat/history "~a" err)]))))
-  (close-response resp)
-  (when after (after))
+  (when after (after resp))
   (current-history
    (append-history
     (current-history)
@@ -77,15 +82,41 @@
     (hash-set (hash-ref result 'message)
               'content (get-output-string sp)))))
 
-(define (chat/output message output
-                     #:assistant-start [fake #f])
-  (chat/history
+(define (chat/history/output message output
+                             #:assistant-start [fake #f])
+  (chat-with-history
    message
+   #:before (and fake (λ (resp) (write-string fake output)))
    (λ (content json)
      (write-string content output)
      (flush-output output))
-   #:before (and fake (λ () (write-string fake output)))
+   #:after close-response
    #:assistant-start fake))
+
+(define (chat/history message
+                      #:assistant-start [fake #f]
+                      #:json? [json? #f]
+                      #:close-response? [close-response? #t])
+  (define prompt (make-continuation-prompt-tag))
+  (call-with-continuation-prompt
+   (λ ()
+     (chat-with-history
+      message
+      #:before
+      (λ (resp)
+        (call-with-composable-continuation
+         (λ (cc)
+           (abort-current-continuation
+            prompt
+            (λ () (response/producer
+                   (response-port resp)
+                   (generator () (cc))))))))
+      (λ (content json)
+        (yield (if json? json content)))
+      #:after (and close-response? close-response)
+      #:assistant-start fake)
+     (yield eof))
+   prompt))
 
 (define (generate prompt
                   #:images [images #f]

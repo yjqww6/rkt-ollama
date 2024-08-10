@@ -49,7 +49,7 @@
               #:start [fake (current-assistant-start)]
               . items)
   (with-cust _
-    (p:chat/output (build-message "user" items) output #:assistant-start fake)
+    (p:chat/history/output (build-message "user" items) output #:assistant-start fake)
     (void)))
 
 (define (generate #:output [output (current-chat-output-port)] . items)
@@ -62,7 +62,7 @@
   (match-define (list history ... user assistant) (current-history))
   (current-history
    (parameterize ([current-history history])
-     (p:chat/output user output #:assistant-start fake)
+     (p:chat/history/output user output #:assistant-start fake)
      (current-history))))
 
 (define (continue #:output [output (current-chat-output-port)])
@@ -70,7 +70,7 @@
     (current-history))
   (current-history
    (parameterize ([current-history history])
-     (p:chat/output user output #:assistant-start fake)
+     (p:chat/history/output user output #:assistant-start fake)
      (current-history))))
 
 (define (preload)
