@@ -113,6 +113,7 @@
   (define (forward p in)
     (read-bytes (bytes-length (car p)) in))
   (struct message (content))
+  (struct cmd (content))
   (struct lines (first))
 
   (define uploaded! #f)
@@ -169,6 +170,9 @@
          (read-char in)
          (current-system (port->string in))
          (uploaded)]
+        [(eqv? #\! (peek-char in))
+         (read-char in)
+         (cmd (port->string in))]
         [(command-input? in)
          =>
          (λ (p)
@@ -253,6 +257,9 @@
            (loop)]
           [(message? v)
            (run-chat (message-content v))
+           (loop)]
+          [(cmd? v)
+           (run (λ () (system (cmd-content v))))
            (loop)]
           [else
            (call-with-continuation-prompt
