@@ -173,6 +173,9 @@
         [(eqv? #\! (peek-char in))
          (read-char in)
          (cmd (port->string in))]
+        [(eqv? #\/ (peek-char in))
+         (read-char in)
+         (port->list read in)]
         [(command-input? in)
          =>
          (λ (p)
