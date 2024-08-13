@@ -52,10 +52,10 @@
     (p:chat/history/output (build-message "user" items) output #:assistant-start fake)
     (void)))
 
-(define (generate #:output [output (current-chat-output-port)] . items)
+(define (generate #:output [output (current-chat-output-port)] #:raw? [raw #f] . items)
   (define-values (prompt images) (collect items))
   (with-cust _
-    (p:generate/output prompt output #:images images)
+    (p:generate/output prompt output #:images images #:raw? raw)
     (void)))
 
 (define (redo #:output [output (current-chat-output-port)] #:start [fake #f])
