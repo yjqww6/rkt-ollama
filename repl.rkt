@@ -73,8 +73,9 @@
 
 (module+ main
   (require expeditor (submod expeditor configure)
-           racket/port racket/cmdline)
+           racket/port racket/cmdline racket/runtime-path)
   (define ns (namespace-anchor->namespace here))
+  (define-runtime-module-path llama-cpp (submod "main.rkt" llama-cpp))
 
   (port-count-lines! (current-output-port))
   (define no-preload #f)
@@ -87,8 +88,11 @@
    [("-v" "--verbose") "verbose messages" (current-verbose #t)]
    [("-c" "--context-window") c "context window size" (current-context-window (string->number c))]
    [("--host") h "ollama host" (current-host h)]
-   [("--port") p "ollama port" (current-port p)]
+   [("--port") p "ollama port" (current-port (string->number p))]
    [("--no-preload") "don't ask to preload the model on startup" (set! no-preload #t)]
+   [("--llama-cpp") "use llama.cpp chatter"
+                    (set! no-preload #t)
+                    (current-chat (dynamic-require llama-cpp 'chat))]
    #:multi
    [("-r" "--require") file "required file" (namespace-require file ns)])
 

@@ -77,3 +77,12 @@
   (parameterize ([current-tools #f])
     (p:chat '())
     (void)))
+
+(module+ llama-cpp
+  (require (submod "private/main.rkt" llama-cpp))
+  (provide chat)
+  (define (chat #:output [output (current-chat-output-port)]
+              . items)
+  (with-cust _
+    (chat/history/output (build-message "user" items) output)
+    (void))))

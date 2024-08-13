@@ -28,8 +28,9 @@
   (log-network-trace (network:send data))
   (define-values (status headers chat-port)
     (http-sendrecv
-     (current-host) (string-append "/api/" path)
+     (current-host) path
      #:port (current-port) #:method method
+     #:headers '("Content-Type: application/json")
      #:data (and data (jsexpr->bytes data))))
   chat-port)
 
@@ -42,7 +43,17 @@
      'stream (box (current-stream))
      'options (current-options)
      'format (current-response-format)))
-  (response (send "chat" data)))
+  (response (send "/api/chat" data)))
+
+(define (call/interupt proc empty)
+  (with-handlers* ([(λ (e) (and (exn:break? e)
+                                (continuation-prompt-available? break-prompt-tag)))
+                    (λ (e)
+                      (call/cc
+                       (λ (cc)
+                         (abort-current-continuation break-prompt-tag cc)))
+                      (empty))])
+    (proc)))
 
 (define (chat-with-history message proc #:before [before #f] #:after [after #f]
                            #:assistant-start [fake #f])
@@ -58,22 +69,18 @@
     (write-string fake sp))
   (when before (before resp))
   (define result
-    (with-handlers* ([(λ (e) (and (exn:break? e)
-                                  (continuation-prompt-available? break-prompt-tag)))
-                      (λ (e)
-                        (call/cc
-                         (λ (cc)
-                           (abort-current-continuation break-prompt-tag cc)))
-                        (hasheq 'message (fake-assistant "")))])
-      (for/last ([j resp]
-                 #:final (hash-ref j 'done #f))
-        (match j
-          [(hash* ['message (hash* ['content content])])
-           (write-string content sp)
-           (proc content j)
-           j]
-          [(hash* ['error err])
-           (error 'chat/history "~a" err)]))))
+    (call/interupt
+     (λ ()
+       (for/last ([j resp]
+                  #:final (hash-ref j 'done #f))
+         (match j
+           [(hash* ['message (hash* ['content content])])
+            (write-string content sp)
+            (proc content j)
+            j]
+           [(hash* ['error err])
+            (error 'chat/history "~a" err)])))
+     (λ () (hasheq 'message (fake-assistant "")))))
   (when after (after resp))
   (current-history
    (append-history
@@ -135,7 +142,7 @@
                 'template template
                 'context context
                 'format (current-response-format)))
-  (response (send "generate" data)))
+  (response (send "/api/generate" data)))
 
 (define (generate/output prompt output
                          #:images [images #f]
@@ -177,13 +184,13 @@
     (hash-param
      'model (current-model)
      'input prompt))
-  (define chat-port (send "embed" data))
+  (define chat-port (send "/api/embed" data))
   (define j (begin0 (read-json chat-port) (close-input-port chat-port)))
   (log-network-trace (network:recv j))
   (hash-ref j 'embeddings))
 
 (define (list-models [detailed? #f])
-  (define chat-port (send "tags" #f #:method "GET"))
+  (define chat-port (send "/api/tags" #f #:method "GET"))
   (define j (begin0 (read-json chat-port) (close-input-port chat-port)))
   (log-network-trace (network:recv j))
   (define models (hash-ref j 'models))
@@ -191,3 +198,57 @@
     [detailed? models]
     [else (for/list ([m (in-list models)])
             (hash-ref m 'model))]))
+
+(module+ llama-cpp
+  (require racket/string)
+  (provide chat/history/output)
+  (define (chat messages)
+    (define data
+      (hash-param
+       'messages messages
+       'model (current-model)
+       'stream (box (current-stream))))
+    (define p
+      (send "/v1/chat/completions" data))
+    (response/producer
+     p
+     (λ ()
+       (let loop ()
+         (define l (read-line p))
+         (cond
+           [(eof-object? l) l]
+           [(not (non-empty-string? l)) (loop)]
+           [(not (string-prefix? l "data: ")) (string->jsexpr l)]
+           [(string=? l "data: [DONE]") eof]
+           [else (string->jsexpr (substring l 5))])))))
+
+  (define (chat/history/output message output)
+    (define messages
+      (append-history
+       (make-system (current-system))
+       (current-history)
+       message))
+    (define sp (open-output-string))
+    (define resp (chat messages))
+    (let/ec k
+      (call/interupt
+       (λ ()
+         (for ([j resp])
+           (match j
+             [(hash* ['choices (list (or (hash* ['delta (hash* ['content content])])
+                                         (hash* ['message (hash* ['content content])])) _ ...)])
+              (write-string content sp)
+              (write-string content output)
+              (flush-output output)]
+             [(hash* ['choices (list (hash* ['finish_reason (? string?)]) _ ...)])
+              (k)]
+             [(hash* ['error _])
+              (error 'chat "~a" j)])))
+       void))
+    (close-response resp)
+    (current-history
+     (append-history
+      (current-history)
+      message
+      (hasheq 'role "assistant"
+              'content (get-output-string sp))))))
