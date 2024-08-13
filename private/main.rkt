@@ -202,7 +202,7 @@
 (module+ llama-cpp
   (require racket/string)
   (provide chat/history/output current-options)
-  (define current-options (make-parameter #f))
+  (define current-options (make-parameter (hasheq 'cache_prompt #t)))
   (define (chat messages)
     (define data
       (hash-param
