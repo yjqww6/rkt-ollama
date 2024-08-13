@@ -36,7 +36,7 @@
 
 (define preload-evt (box always-evt))
 
-(define (default-chat s)
+(define ((make-default-chat chat) s)
   (define (take c)
     (begin0 (c) (c #f)))
   (sync (unbox preload-evt))
@@ -44,6 +44,8 @@
     (chat (list ((current-make-prompt) s #:paste-text (take current-paste-text))
                 (take current-image)))
     (newline)))
+
+(define default-chat (make-default-chat chat))
 
 (define current-chat (make-parameter default-chat))
 
@@ -92,7 +94,7 @@
    [("--no-preload") "don't ask to preload the model on startup" (set! no-preload #t)]
    [("--llama-cpp") "use llama.cpp chatter"
                     (set! no-preload #t)
-                    (current-chat (dynamic-require llama-cpp 'chat))]
+                    (current-chat (make-default-chat (dynamic-require llama-cpp 'chat)))]
    #:multi
    [("-r" "--require") file "required file" (namespace-require file ns)])
 
