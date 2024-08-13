@@ -201,13 +201,15 @@
 
 (module+ llama-cpp
   (require racket/string)
-  (provide chat/history/output)
+  (provide chat/history/output current-options)
+  (define current-options (make-parameter #f))
   (define (chat messages)
     (define data
       (hash-param
        'messages messages
        'model (current-model)
-       'stream (box (current-stream))))
+       'stream (box (current-stream))
+       (current-options)))
     (define p
       (send "/v1/chat/completions" data))
     (response/producer

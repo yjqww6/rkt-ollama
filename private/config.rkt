@@ -5,6 +5,7 @@
 (define hash-param
   (case-lambda
     [() (hasheq)]
+    [(h) (or h (hasheq))]
     [(k v . r)
      (define h (apply hash-param r))
      (cond

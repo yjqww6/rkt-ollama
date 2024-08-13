@@ -80,7 +80,7 @@
 
 (module+ llama-cpp
   (require (submod "private/main.rkt" llama-cpp))
-  (provide chat)
+  (provide chat current-options)
   (define (chat #:output [output (current-chat-output-port)]
               . items)
   (with-cust _
