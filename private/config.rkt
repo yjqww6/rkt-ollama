@@ -26,18 +26,18 @@
 
 (define current-options (make-parameter #f))
 
-(define (make-option key)
+(define (make-option key opt)
   (make-derived-parameter
-   current-options
-   (λ (v) (hash-set (or (current-options) (hasheq)) key v))
+   opt
+   (λ (v) (hash-set (or (opt) (hasheq)) key v))
    (λ (v) (cond
-            [(current-options)
+            [(opt)
              =>
              (λ (c) (hash-ref c key #f))]
             [else #f]))))
 
 (define-syntax-parse-rule (define-options [Name:id Key:id] ...)
-  (begin (define Name (make-option 'Key)) ...))
+  (begin (define Name (make-option 'Key current-options)) ...))
 
 (define-options
   [current-context-window num_ctx]
