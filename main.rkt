@@ -70,7 +70,16 @@
   (require (submod "private/main.rkt" llama-cpp))
   (provide chat current-options)
   (define (chat #:output [output (current-chat-output-port)]
+                #:start [fake (current-assistant-start)]
                 . items)
-    (with-cust _
-      (chat/history/output (build-message "user" items) output)
-      (void))))
+    (define (f)
+      (with-cust _
+        (chat/history/output (build-message "user" items) output)
+        (void)))
+    (define (make-grammar fake)
+      (hash-set (current-options) 'grammar (format "root ::= ~v .*" fake)))
+    (cond
+      [(not fake) (f)]
+      [else
+       (parameterize ([current-options (make-grammar fake)])
+         (f))])))
