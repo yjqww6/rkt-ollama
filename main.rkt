@@ -4,7 +4,7 @@
          syntax/parse/define
          racket/string racket/match)
 (provide (all-from-out "private/config.rkt" "private/history.rkt" "private/log.rkt")
-         chat generate undo redo continue clear preload
+         chat generate undo clear preload
          current-chat-output-port current-assistant-start
          with-cust)
 
@@ -32,10 +32,13 @@
       [else (loop (cdr items) strs (cons (car items) imgs))])))
 
 (define (build-message role items)
-  (define-values (content images) (collect items))
-  (hash-param 'role role
-              'content content
-              'images images))
+  (match items
+    [(list (? hash? h)) h]
+    [else
+     (define-values (content images) (collect items))
+     (hash-param 'role role
+                 'content content
+                 'images images)]))
 
 (define current-chat-output-port
   (make-derived-parameter
@@ -58,21 +61,6 @@
     (p:generate/output prompt output #:images images #:raw? raw)
     (void)))
 
-(define (redo #:output [output (current-chat-output-port)] #:start [fake #f])
-  (match-define (list history ... user assistant) (current-history))
-  (current-history
-   (parameterize ([current-history history])
-     (p:chat/history/output user output #:assistant-start fake)
-     (current-history))))
-
-(define (continue #:output [output (current-chat-output-port)])
-  (match-define (list history ... user (hash* ['role "assistant"] ['content fake]))
-    (current-history))
-  (current-history
-   (parameterize ([current-history history])
-     (p:chat/history/output user output #:assistant-start fake)
-     (current-history))))
-
 (define (preload)
   (parameterize ([current-tools #f])
     (p:chat '())
@@ -82,7 +70,7 @@
   (require (submod "private/main.rkt" llama-cpp))
   (provide chat current-options)
   (define (chat #:output [output (current-chat-output-port)]
-              . items)
-  (with-cust _
-    (chat/history/output (build-message "user" items) output)
-    (void))))
+                . items)
+    (with-cust _
+      (chat/history/output (build-message "user" items) output)
+      (void))))

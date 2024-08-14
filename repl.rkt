@@ -40,10 +40,13 @@
   (define (take c)
     (begin0 (c) (c #f)))
   (sync (unbox preload-evt))
-  (parameterize ([current-assistant-start (take current-output-prefix)])
-    (chat (list ((current-make-prompt) s #:paste-text (take current-paste-text))
-                (take current-image)))
-    (newline)))
+  (cond
+    [(hash? s) (chat s)]
+    [else
+     (parameterize ([current-assistant-start (take current-output-prefix)])
+       (chat (list ((current-make-prompt) s #:paste-text (take current-paste-text))
+                   (take current-image)))
+       (newline))]))
 
 (define default-chat (make-default-chat chat))
 
@@ -72,6 +75,22 @@
         (thread-wait thr)))))
 
 (define current-output-prefix (make-parameter #f))
+
+(define (redo)
+  (match-define (list history ... user assistant) (current-history))
+  (current-history
+   (parameterize ([current-history history])
+     ((current-chat) user)
+     (current-history))))
+
+(define (continue)
+  (match-define (list history ... user (hash* ['role "assistant"] ['content fake]))
+    (current-history))
+  (current-history
+   (parameterize ([current-history history])
+     (parameterize ([current-assistant-start fake])
+       ((current-chat) user))
+     (current-history))))
 
 (module+ main
   (require expeditor (submod expeditor configure)
