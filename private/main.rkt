@@ -210,6 +210,9 @@
        'messages messages
        'model (current-model)
        'stream (box (current-stream))
+       'temperature (current-temperature)
+       'top_k (current-top-k)
+       'top_p (current-top-p)
        (current-options)))
     (define p
       (send "/v1/chat/completions" data))

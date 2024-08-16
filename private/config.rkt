@@ -44,4 +44,5 @@
   [current-temperature temperature]
   [current-repeat-penalty repeat_penalty]
   [current-top-p top_p]
+  [current-top-k top_k]
   [current-seed seed])
