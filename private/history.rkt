@@ -30,6 +30,7 @@
       [(cons m r) (loop r)])))
 
 (define (clear)
-  (current-history '()))
+  (current-history '())
+  (current-context #f))
 
 (define current-context (make-parameter #f))
