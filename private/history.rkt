@@ -31,3 +31,5 @@
 
 (define (clear)
   (current-history '()))
+
+(define current-context (make-parameter #f))

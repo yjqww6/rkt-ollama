@@ -49,6 +49,12 @@
        (newline))]))
 
 (define default-chat (make-default-chat chat))
+(define generate-chat
+  (make-default-chat
+   (λ (s)
+     (when (current-assistant-start)
+       (error 'generate-chat "unsupported"))
+     (generate s #:use-context? #t))))
 
 (define current-chat (make-parameter default-chat))
 

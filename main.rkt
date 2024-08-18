@@ -55,10 +55,17 @@
     (p:chat/history/output (build-message "user" items) output #:assistant-start fake)
     (void)))
 
-(define (generate #:output [output (current-chat-output-port)] #:raw? [raw #f] . items)
+(define (generate #:output [output (current-chat-output-port)] #:raw? [raw #f] #:use-context? [use-context #f]
+                  . items)
   (define-values (prompt images) (collect items))
   (with-cust _
-    (p:generate/output prompt output #:images images #:raw? raw)
+    (define r (p:generate/output prompt output #:images images #:raw? raw
+                                 #:context (and use-context (current-context))))
+    (when use-context
+      (match r
+        [(hash* ['context new-ctx])
+         (current-context new-ctx)]
+        [else (void)]))
     (void)))
 
 (define (preload)
