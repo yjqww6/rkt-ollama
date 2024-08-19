@@ -37,16 +37,17 @@
 (define preload-evt (box always-evt))
 
 (define ((make-default-chat chat) s)
-  (define (take c)
-    (begin0 (c) (c #f)))
   (sync (unbox preload-evt))
   (cond
     [(hash? s) (chat s)]
     [else
-     (parameterize ([current-assistant-start (take current-output-prefix)])
-       (chat (list ((current-make-prompt) s #:paste-text (take current-paste-text))
-                   (take current-image)))
-       (newline))]))
+     (parameterize ([current-assistant-start (current-output-prefix)])
+       (chat (list ((current-make-prompt) s #:paste-text (current-paste-text))
+                   (current-image)))
+       (newline))
+     (current-output-prefix #f)
+     (current-paste-text #f)
+     (current-image #f)]))
 
 (define default-chat (make-default-chat chat))
 (define generate-chat
