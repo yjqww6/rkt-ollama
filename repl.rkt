@@ -120,7 +120,8 @@
    [("--no-preload") "don't ask to preload the model on startup" (set! no-preload #t)]
    [("--llama-cpp") "use llama.cpp chatter"
                     (set! no-preload #t)
-                    (current-chat (make-default-chat (dynamic-require llama-cpp 'chat)))]
+                    (current-chat (make-default-chat (dynamic-require llama-cpp 'chat)))
+                    (namespace-require llama-cpp ns)]
    #:multi
    [("-r" "--require") file "required file" (namespace-require file ns)])
 

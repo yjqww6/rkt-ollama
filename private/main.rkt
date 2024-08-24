@@ -213,6 +213,7 @@
        'temperature (current-temperature)
        'top_k (current-top-k)
        'top_p (current-top-p)
+       'n_predict (current-num-predict)
        (current-options)))
     (define p
       (send "/v1/chat/completions" data))
@@ -221,6 +222,7 @@
      (λ ()
        (let loop ()
          (define l (read-line p))
+         (log-network-trace (network:recv l))
          (cond
            [(eof-object? l) l]
            [(not (non-empty-string? l)) (loop)]

@@ -45,4 +45,5 @@
   [current-repeat-penalty repeat_penalty]
   [current-top-p top_p]
   [current-top-k top_k]
-  [current-seed seed])
+  [current-seed seed]
+  [current-num-predict num_predict])
