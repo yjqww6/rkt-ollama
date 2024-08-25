@@ -287,11 +287,11 @@
            (flush-output output)
            (when stop
              (match j
-               [(hash* ['tokens_evaluated eval_count] ['tokens_predicted prompt_eval_count]
-                       ['timings (hash* ['prompt_ms prompt-eval-duration] ['predicted_ms eval-duration]
-                                        ['prompt_per_second perf-prompt-tokens-per-second]
+               [(hash* ['tokens_evaluated prompt-tokens] ['tokens_predicted eval-tokens]
+                       ['timings (hash* ['prompt_ms prompt-duration] ['predicted_ms eval-duration]
+                                        ['prompt_per_second prompt-tokens-per-second]
                                         ['predicted_per_second eval-tokens-per-seoncd])])
-                (log-perf-trace (perf prompt_eval_count eval_count (/ prompt-eval-duration 1e3) (/ eval-duration 1e3)
-                                      perf-prompt-tokens-per-second eval-tokens-per-seoncd))])
+                (log-perf-trace (perf prompt-tokens eval-tokens (/ prompt-duration 1e3) (/ eval-duration 1e3)
+                                      prompt-tokens-per-second eval-tokens-per-seoncd))])
              (k))])))
     (close-response resp)))
