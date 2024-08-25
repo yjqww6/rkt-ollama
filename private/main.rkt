@@ -11,10 +11,13 @@
     (in-port
      (λ (p)
        (define l (read-line p))
-       (log-network-trace (network:recv l))
-       (define j (string->jsexpr l))
-       (perf-trace j)
-       j)
+       (cond
+         [(eof-object? l) l]
+         [else
+          (log-network-trace (network:recv l))
+          (define j (string->jsexpr l))
+          (perf-trace j)
+          j]))
      (response-port resp))))
 
 (struct response/producer response (proc)
@@ -180,7 +183,7 @@
             ['eval_duration eval_duration]
             ['prompt_eval_count prompt_eval_count]
             ['eval_count eval_count])
-     (log-perf-trace (perf prompt_eval_count eval_count prompt_eval_duration eval_duration))]
+     (log-perf-trace (perf prompt_eval_count eval_count (/ prompt_eval_duration 1e9) (/ eval_duration 1e9) #f #f))]
     [else (void)]))
 
 (define (embeddings prompt)
@@ -205,35 +208,37 @@
 
 (module+ llama-cpp
   (require racket/string)
-  (provide chat/history/output current-options current-grammar)
+  (provide chat/history/output completion/output current-options current-grammar)
   (define current-options (make-parameter (hasheq 'cache_prompt #t)))
   (define current-grammar (make-option 'grammar current-options))
+
+  (define (build-options)
+    (hash-param
+     'stream (box (current-stream))
+     'temperature (current-temperature)
+     'top_k (current-top-k)
+     'top_p (current-top-p)
+     'n_predict (current-num-predict)
+     (current-options)))
+
+  (define ((reciever port))
+    (let loop ()
+      (define l (read-line port 'any-one))
+      (when (non-empty-string? l)
+        (log-network-trace (network:recv l)))
+      (cond
+        [(eof-object? l) l]
+        [(not (non-empty-string? l)) (loop)]
+        [(not (string-prefix? l "data: ")) (string->jsexpr l)]
+        [(string=? l "data: [DONE]") eof]
+        [else (string->jsexpr (substring l 5))])))
+  
   (define (chat messages)
     (define data
-      (hash-param
-       'messages messages
-       'model (current-model)
-       'stream (box (current-stream))
-       'temperature (current-temperature)
-       'top_k (current-top-k)
-       'top_p (current-top-p)
-       'n_predict (current-num-predict)
-       (current-options)))
+      (hash-set (build-options) 'messages messages))
     (define p
       (send "/v1/chat/completions" data))
-    (response/producer
-     p
-     (λ ()
-       (let loop ()
-         (define l (read-line p 'any-one))
-         (when (non-empty-string? l)
-           (log-network-trace (network:recv l)))
-         (cond
-           [(eof-object? l) l]
-           [(not (non-empty-string? l)) (loop)]
-           [(not (string-prefix? l "data: ")) (string->jsexpr l)]
-           [(string=? l "data: [DONE]") eof]
-           [else (string->jsexpr (substring l 5))])))))
+    (response/producer p (reciever p)))
 
   (define (chat/history/output message output)
     (define messages
@@ -256,7 +261,7 @@
              [(hash* ['choices (list (hash* ['finish_reason (? string?)]) _ ...)])
               (match j
                 [(hash* ['usage (hash* ['completion_tokens eval_count] ['prompt_tokens prompt_eval_count])])
-                 (log-perf-trace (perf prompt_eval_count eval_count #f #f))]
+                 (log-perf-trace (perf prompt_eval_count eval_count #f #f #f #f))]
                 [else (void)])
               (k)]
              [(hash* ['error _])
@@ -268,4 +273,25 @@
       (current-history)
       message
       (hasheq 'role "assistant"
-              'content (get-output-string sp))))))
+              'content (get-output-string sp)))))
+
+  (define (completion/output prompt output)
+    (define data (hash-set (build-options) 'prompt prompt))
+    (define p (send "/completion" data))
+    (define resp (response/producer p (reciever p)))
+    (let/ec k
+      (for ([j resp])
+        (match j
+          [(hash* ['content content] ['stop stop])
+           (write-string content output)
+           (flush-output output)
+           (when stop
+             (match j
+               [(hash* ['tokens_evaluated eval_count] ['tokens_predicted prompt_eval_count]
+                       ['timings (hash* ['prompt_ms prompt-eval-duration] ['predicted_ms eval-duration]
+                                        ['prompt_per_second perf-prompt-tokens-per-second]
+                                        ['predicted_per_second eval-tokens-per-seoncd])])
+                (log-perf-trace (perf prompt_eval_count eval_count (/ prompt-eval-duration 1e3) (/ eval-duration 1e3)
+                                      perf-prompt-tokens-per-second eval-tokens-per-seoncd))])
+             (k))])))
+    (close-response resp)))

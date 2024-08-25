@@ -6,29 +6,28 @@
 (struct network:send network () #:transparent)
 (struct network:recv network () #:transparent)
 
-(struct perf (prompt-tokens eval-tokens prompt-duration eval-duration) #:transparent)
+(struct perf (prompt-tokens eval-tokens prompt-duration eval-duration prompt-tokens-per-second eval-tokens-per-second) #:transparent)
 
 (define default-network-trace void)
 
 (define (default-perf-trace p)
-  (define (->secs a)
-    (and (number? a) (/ a 1e9)))
-  (define (show case tokens duration)
+  (define (show case tokens duration tokens-per-second)
     (define pad (make-string (string-length case) #\space))
     (cond
       [duration
        (printf "~a: ~a seconds~%" case duration)
        (printf "~a  ~a tokens~%" pad  tokens)
-       (printf "~a  ~a token/s~%" pad (/ tokens duration))]
+       (printf "~a  ~a token/s~%" pad (or tokens-per-second (/ tokens duration)))]
       [else
        (printf "~a  ~a tokens~%" case tokens)]))
   (when (current-verbose)
     (match p
       [(perf prompt-tokens eval-tokens
-             (app ->secs prompt-duration) (app ->secs eval-duration))
+             prompt-duration eval-duration
+             prompt-tokens-per-second eval-tokens-per-second)
        (newline)
-       (show "PROMPT" prompt-tokens prompt-duration)
-       (show "EVAL" eval-tokens eval-duration)])))
+       (show "PROMPT" prompt-tokens prompt-duration prompt-tokens-per-second)
+       (show "EVAL" eval-tokens eval-duration eval-tokens-per-second)])))
 
 (define current-network-trace (make-parameter void))
 (define current-perf-trace (make-parameter default-perf-trace))

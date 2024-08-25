@@ -75,7 +75,15 @@
 
 (module+ llama-cpp
   (require (submod "private/main.rkt" llama-cpp))
-  (provide chat (all-from-out (submod "private/main.rkt" llama-cpp)))
+  (provide chat completion (all-from-out (submod "private/main.rkt" llama-cpp)))
+  
+  (define (call/prefill-workaround fake f)
+    (cond
+      [(not fake) (f)]
+      [else
+       (parameterize ([current-grammar (format "root ::= ~v .*" fake)])
+         (f))]))
+  
   (define (chat #:output [output (current-chat-output-port)]
                 #:start [fake (current-assistant-start)]
                 . items)
@@ -83,8 +91,14 @@
       (with-cust _
         (chat/history/output (build-message "user" items) output)
         (void)))
-    (cond
-      [(not fake) (f)]
-      [else
-       (parameterize ([current-grammar (format "root ::= ~v .*" fake)])
-         (f))])))
+    (call/prefill-workaround fake f))
+  
+  (define (completion #:output [output (current-chat-output-port)]
+                      #:start [fake (current-assistant-start)]
+                      . items)
+    (define (f)
+      (define-values (prompt images) (collect items))
+      (with-cust _
+        (completion/output prompt output)
+        (void)))
+    (call/prefill-workaround fake f)))
