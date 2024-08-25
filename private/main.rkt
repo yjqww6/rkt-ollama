@@ -9,8 +9,10 @@
   #:property prop:sequence
   (λ (resp)
     (in-port
-     (λ (p) (define j (read-json p))
-       (log-network-trace (network:recv j))
+     (λ (p)
+       (define l (read-line p))
+       (log-network-trace (network:recv l))
+       (define j (string->jsexpr l))
        (perf-trace j)
        j)
      (response-port resp))))
@@ -24,14 +26,16 @@
   (cond
     [(response-port resp) => close-input-port]))
 
-(define (send path data #:method [method "POST"])
-  (log-network-trace (network:send data))
+(define (send path j #:method [method "POST"])
+  (define data (and j (jsexpr->bytes j)))
+  (when data
+    (log-network-trace (network:send data)))
   (define-values (status headers chat-port)
     (http-sendrecv
      (current-host) path
      #:port (current-port) #:method method
      #:headers '("Content-Type: application/json")
-     #:data (and data (jsexpr->bytes data))))
+     #:data data))
   chat-port)
 
 (define (chat messages)
@@ -221,8 +225,9 @@
      p
      (λ ()
        (let loop ()
-         (define l (read-line p))
-         (log-network-trace (network:recv l))
+         (define l (read-line p 'any-one))
+         (when (non-empty-string? l)
+           (log-network-trace (network:recv l)))
          (cond
            [(eof-object? l) l]
            [(not (non-empty-string? l)) (loop)]
@@ -249,6 +254,10 @@
               (write-string content output)
               (flush-output output)]
              [(hash* ['choices (list (hash* ['finish_reason (? string?)]) _ ...)])
+              (match j
+                [(hash* ['usage (hash* ['completion_tokens eval_count] ['prompt_tokens prompt_eval_count])])
+                 (log-perf-trace (perf prompt_eval_count eval_count #f #f))]
+                [else (void)])
               (k)]
              [(hash* ['error _])
               (error 'chat "~a" j)])))

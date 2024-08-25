@@ -15,9 +15,13 @@
     (and (number? a) (/ a 1e9)))
   (define (show case tokens duration)
     (define pad (make-string (string-length case) #\space))
-    (printf "~a: ~a seconds~%" case duration)
-    (printf "~a  ~a tokens~%" pad  tokens)
-    (printf "~a  ~a token/s~%" pad (/ tokens duration)))
+    (cond
+      [duration
+       (printf "~a: ~a seconds~%" case duration)
+       (printf "~a  ~a tokens~%" pad  tokens)
+       (printf "~a  ~a token/s~%" pad (/ tokens duration))]
+      [else
+       (printf "~a  ~a tokens~%" case tokens)]))
   (when (current-verbose)
     (match p
       [(perf prompt-tokens eval-tokens
