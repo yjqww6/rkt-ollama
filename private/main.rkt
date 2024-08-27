@@ -62,8 +62,7 @@
                       (empty))])
     (proc)))
 
-(define (chat-with-history message proc #:before [before #f] #:after [after #f]
-                           #:assistant-start [fake #f])
+(define (call/history message proc #:assistant-start [fake #f])
   (define messages
     (append-history 
      (make-system (current-system))
@@ -71,30 +70,38 @@
      message
      (fake-assistant fake)))
   (define sp (open-output-string))
-  (define resp (chat messages))
   (when fake
     (write-string fake sp))
-  (when before (before resp))
-  (define result
-    (call/interupt
-     (λ ()
-       (for/last ([j resp]
-                  #:final (hash-ref j 'done #f))
-         (match j
-           [(hash* ['message (hash* ['content content])])
-            (write-string content sp)
-            (proc content j)
-            j]
-           [(hash* ['error err])
-            (error 'chat/history "~a" err)])))
-     (λ () (hasheq 'message (fake-assistant "")))))
-  (when after (after resp))
+  (define result (proc messages sp))
   (current-history
    (append-history
     (current-history)
     message
     (hash-set (hash-ref result 'message)
               'content (get-output-string sp)))))
+
+(define (chat-with-history message proc #:before [before #f] #:after [after #f]
+                           #:assistant-start [fake #f])
+  (call/history
+   message
+   (λ (messages sp)
+     (define resp (chat messages))
+     (when before (before resp))
+     (begin0
+       (call/interupt
+        (λ ()
+          (for/last ([j resp]
+                     #:final (hash-ref j 'done #f))
+            (match j
+              [(hash* ['message (hash* ['content content])])
+               (write-string content sp)
+               (proc content j)
+               j]
+              [(hash* ['error err])
+               (error 'chat/history "~a" err)])))
+        (λ () (hasheq 'message (fake-assistant ""))))
+       (when after (after resp))))
+   #:assistant-start fake))
 
 (define (chat/history/output message output
                              #:assistant-start [fake #f])
@@ -208,7 +215,8 @@
 
 (module+ llama-cpp
   (require racket/string)
-  (provide chat/history/output completion/output current-options current-grammar)
+  (provide chat/history/output completion/output current-options current-grammar
+           current-chat-template completion/history/output)
   (define current-options (make-parameter (hasheq 'cache_prompt #t)))
   (define current-grammar (make-option 'grammar current-options))
 
@@ -294,4 +302,36 @@
                 (log-perf-trace (perf prompt-tokens eval-tokens (/ prompt-duration 1e3) (/ eval-duration 1e3)
                                       prompt-tokens-per-second eval-tokens-per-seoncd))])
              (k))])))
-    (close-response resp)))
+    (close-response resp))
+
+  (define current-chat-template (make-parameter (λ (messages) (error 'empty-template))))
+  
+  (define (completion/history/output message output #:assistant-start [fake #f] #:template [template (current-chat-template)])
+    (call/history
+     message
+     (λ (messages sp)
+       (define prompt (template messages))
+       (define data (hash-set (build-options) 'prompt prompt))
+       (define p (send "/completion" data))
+       (define resp (response/producer p (reciever p)))
+       (when fake
+         (write-string fake output))
+       (let/ec k
+         (for ([j resp])
+           (match j
+             [(hash* ['content content] ['stop stop])
+              (write-string content sp)
+              (write-string content output)
+              (flush-output output)
+              (when stop
+                (match j
+                  [(hash* ['tokens_evaluated prompt-tokens] ['tokens_predicted eval-tokens]
+                          ['timings (hash* ['prompt_ms prompt-duration] ['predicted_ms eval-duration]
+                                           ['prompt_per_second prompt-tokens-per-second]
+                                           ['predicted_per_second eval-tokens-per-seoncd])])
+                   (log-perf-trace (perf prompt-tokens eval-tokens (/ prompt-duration 1e3) (/ eval-duration 1e3)
+                                         prompt-tokens-per-second eval-tokens-per-seoncd))])
+                (k))])))
+       (close-response resp)
+       (hasheq 'message (hasheq 'role "assistant")))
+     #:assistant-start fake)))
