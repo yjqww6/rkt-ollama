@@ -316,22 +316,25 @@
        (define resp (response/producer p (reciever p)))
        (when fake
          (write-string fake output))
-       (let/ec k
-         (for ([j resp])
-           (match j
-             [(hash* ['content content] ['stop stop])
-              (write-string content sp)
-              (write-string content output)
-              (flush-output output)
-              (when stop
-                (match j
-                  [(hash* ['tokens_evaluated prompt-tokens] ['tokens_predicted eval-tokens]
-                          ['timings (hash* ['prompt_ms prompt-duration] ['predicted_ms eval-duration]
-                                           ['prompt_per_second prompt-tokens-per-second]
-                                           ['predicted_per_second eval-tokens-per-seoncd])])
-                   (log-perf-trace (perf prompt-tokens eval-tokens (/ prompt-duration 1e3) (/ eval-duration 1e3)
-                                         prompt-tokens-per-second eval-tokens-per-seoncd))])
-                (k))])))
-       (close-response resp)
-       (hasheq 'message (hasheq 'role "assistant")))
+       (call/interupt
+        (λ ()
+          (let/ec k
+            (for ([j resp])
+              (match j
+                [(hash* ['content content] ['stop stop])
+                 (write-string content sp)
+                 (write-string content output)
+                 (flush-output output)
+                 (when stop
+                   (match j
+                     [(hash* ['tokens_evaluated prompt-tokens] ['tokens_predicted eval-tokens]
+                             ['timings (hash* ['prompt_ms prompt-duration] ['predicted_ms eval-duration]
+                                              ['prompt_per_second prompt-tokens-per-second]
+                                              ['predicted_per_second eval-tokens-per-seoncd])])
+                      (log-perf-trace (perf prompt-tokens eval-tokens (/ prompt-duration 1e3) (/ eval-duration 1e3)
+                                            prompt-tokens-per-second eval-tokens-per-seoncd))])
+                   (k))])))
+          (close-response resp)
+          (hasheq 'message (hasheq 'role "assistant")))
+        (λ () (hasheq 'message (hasheq 'role "assistant")))))
      #:assistant-start fake)))
