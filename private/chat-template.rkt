@@ -1,6 +1,6 @@
 #lang racket/base
 (require racket/list)
-(provide llama3 gemma2)
+(provide chatml llama3 gemma2)
 ;;;; mostly for llama.cpp prefill
 
 (define (split-messages messages [merge-system? #t])
@@ -15,6 +15,18 @@
       [(not merge-system?) (values sys msgs prefill)]
       [sys (values (cons sys msgs) prefill)]
       [else (values msgs prefill)])))
+
+(define (chatml messages)
+  (define s (open-output-string))
+  (define-values (msgs prefill) (split-messages messages))
+  (for ([msg (in-list msgs)])
+    (fprintf s "<|im_start|>~a\n~a<|im_end|>\n"
+             (hash-ref msg 'role) (hash-ref msg 'content)))
+  (fprintf s "<|im_start|>assistant\n~a"
+           (if prefill
+               (hash-ref prefill 'content)
+               ""))
+  (get-output-string s))
 
 (define (llama3 messages)
   (define s (open-output-string))
