@@ -107,13 +107,10 @@
            #:output [output (current-chat-output-port)]
            #:start [fake (current-assistant-start)]
            . items)
-    (define-values (prompt images) (collect items))
     (with-cust _
-      (parameterize ([current-options (hash-set (current-options) 'image_data images)])
-        (completion/history/output (hasheq 'role "user"
-                                           'content prompt)
-                                   output
-                                   #:assistant-start fake))
+      (completion/history/output (build-message "user" items)
+                                 output
+                                 #:assistant-start fake)
       (void)))
 
   (require (prefix-in template: "private/chat-template.rkt"))
