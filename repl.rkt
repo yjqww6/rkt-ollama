@@ -119,17 +119,17 @@
    [("--port") p "ollama port" (current-port (string->number p))]
    [("--no-preload") "don't ask to preload the model on startup" (set! no-preload #t)]
    #:once-any
-   [("--llama-cpp") "use llama.cpp chatter"
-                    (set! no-preload #t)
-                    (namespace-require llama-cpp ns)
-                    (current-chat (make-default-chat (dynamic-require llama-cpp 'chat)))]
-   [("--llama-cpp-tpl") tpl
-                        "use llama.cpp chatter with template"
+   [("--llama-cpp-oai") "use llama.cpp openai compatible chatter, may work with other implementations"
                         (set! no-preload #t)
                         (namespace-require llama-cpp ns)
-                        ((dynamic-require llama-cpp 'current-chat-template)
-                         (dynamic-require llama-cpp (string->symbol (string-append "template:" tpl))))
-                        (current-chat (make-default-chat (dynamic-require llama-cpp 'chat-by-completion)))]
+                        (current-chat (make-default-chat (dynamic-require llama-cpp 'chat)))]
+   [("--llama-cpp") tpl
+                    "use llama.cpp chatter with template"
+                    (set! no-preload #t)
+                    (namespace-require llama-cpp ns)
+                    ((dynamic-require llama-cpp 'current-chat-template)
+                     (dynamic-require llama-cpp (string->symbol (string-append "template:" tpl))))
+                    (current-chat (make-default-chat (dynamic-require llama-cpp 'chat-by-completion)))]
    #:multi
    [("-r" "--require") file "required file" (namespace-require file ns)])
 

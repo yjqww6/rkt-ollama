@@ -226,7 +226,7 @@
      'temperature (current-temperature)
      'top_k (current-top-k)
      'top_p (current-top-p)
-     'n_predict (current-num-predict)
+     'max_tokens (current-num-predict)
      (current-options)))
 
   (define ((reciever port))
