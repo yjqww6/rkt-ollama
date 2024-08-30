@@ -101,9 +101,10 @@
 
 (module+ main
   (require expeditor (submod expeditor configure)
-           racket/port racket/cmdline racket/runtime-path)
+           racket/port racket/cmdline racket/runtime-path
+           (for-syntax racket/base))
   (define ns (namespace-anchor->namespace here))
-  (define-runtime-module-path llama-cpp (submod "main.rkt" llama-cpp))
+  (define-runtime-module-path-index llama-cpp '(submod "main.rkt" llama-cpp))
 
   (port-count-lines! (current-output-port))
   (define no-preload #f)
