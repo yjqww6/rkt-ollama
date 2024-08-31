@@ -43,7 +43,9 @@
   [current-context-window num_ctx]
   [current-temperature temperature]
   [current-repeat-penalty repeat_penalty]
+  [current-repeat-last-n repeat_last_n]
   [current-top-p top_p]
+  [current-min-p min_p]
   [current-top-k top_k]
   [current-seed seed]
   [current-num-predict num_predict])

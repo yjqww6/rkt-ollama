@@ -226,6 +226,9 @@
      'temperature (current-temperature)
      'top_k (current-top-k)
      'top_p (current-top-p)
+     'min_p (current-min-p)
+     'repeat_penalty (current-repeat-penalty)
+     'repeat_last_n (current-repeat-last-n)
      'max_tokens (current-num-predict)
      (current-options)))
 
