@@ -29,7 +29,12 @@
 (define (make-option key opt)
   (make-derived-parameter
    opt
-   (λ (v) (hash-set (or (opt) (hasheq)) key v))
+   (λ (v) (cond
+            [v (hash-set (or (opt) (hasheq)) key v)]
+            [(opt)
+             =>
+             (λ (o) (hash-remove o key))]
+            [else #f]))
    (λ (v) (cond
             [(opt)
              =>
