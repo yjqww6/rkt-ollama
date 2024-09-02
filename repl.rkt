@@ -1,5 +1,6 @@
 #lang racket/base
-(require "main.rkt" racket/file racket/class racket/match racket/system racket/port
+(require "main.rkt"
+         racket/list racket/file racket/class racket/match racket/system racket/port
          racket/lazy-require)
 (provide (all-defined-out) (all-from-out "main.rkt"))
 (define-namespace-anchor here)
@@ -150,6 +151,10 @@
   (define (multi-line? in)
     (regexp-match-peek #px"^'''" in))
 
+  (define (multi-line-paste? in)
+    (regexp-match-peek #px"^```(\r\n|\n|\r|$)" in))
+  (define multi-input-paste-end #px"(\r\n|\n|\r)```$")
+
   (define (forward p in)
     (read-bytes (bytes-length (car p)) in))
   (struct message (content))
@@ -231,6 +236,12 @@
          (λ (p)
            (forward p in)
            (lines (port->string in)))]
+        [(multi-line-paste? in)
+         =>
+         (λ (p)
+           (forward p in)
+           (current-paste-text (car (regexp-split multi-input-paste-end (port->string in))))
+           (uploaded))]
         [else
          (message (port->string in))])))
 
@@ -247,6 +258,11 @@
          (λ (p)
            (forward p in)
            (regexp-match? multi-input-end in))]
+        [(multi-line-paste? in)
+         =>
+         (λ (p)
+           (forward p in)
+           (regexp-match? multi-input-paste-end in))]
         [(multi-line? in) #t]
         [else #t])))
 
