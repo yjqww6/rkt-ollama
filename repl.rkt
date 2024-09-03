@@ -100,6 +100,18 @@
        ((current-chat) user))
      (current-history))))
 
+(define (take-last-prompt)
+  (match-define (list history ... (hash* ['role "user"] ['content content]) assistant)
+    (current-history))
+  (define c (dynamic-require 'racket/gui/base 'the-clipboard))
+  (define t (current-milliseconds))
+  (match (regexp-match #px"^```\n(.*)\n```(.*)$" content)
+    [(list _ paste prompt)
+     (current-paste-text paste)
+     (send c set-clipboard-string prompt t)]
+    [else (send c set-clipboard-string content t)])
+  (current-history history))
+
 (module+ main
   (require expeditor (submod expeditor configure)
            racket/port racket/cmdline racket/runtime-path
