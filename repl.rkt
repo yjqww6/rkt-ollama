@@ -15,14 +15,28 @@
   (when p
     (current-image (file->bytes p))))
 
+(define clip
+  (let ([c #f])
+    (define (init)
+      (unless c
+        (set! c (dynamic-require 'racket/gui/base 'the-clipboard)))
+      (current-milliseconds))
+    (case-lambda
+      [()
+       (define t (init))
+       (or (send c get-clipboard-bitmap t)
+           (send c get-clipboard-string t))]
+      [(s)
+       (define t (init))
+       (send c set-clipboard-string s t)])))
+
 (define (paste)
-  (define c (dynamic-require 'racket/gui/base 'the-clipboard))
-  (define t (current-milliseconds))
+  (define pasted (clip))
   (cond
-    [(send c get-clipboard-bitmap t)
-     => current-image]
-    [(send c get-clipboard-string t)
-     => current-paste-text]))
+    [(string? pasted)
+     (current-paste-text pasted)]
+    [pasted (current-image pasted)]
+    [else (void)]))
 
 (define (default-make-prompt prompt #:paste-text paste-text)
   (cond
@@ -91,25 +105,25 @@
      ((current-chat) user)
      (current-history))))
 
-(define (continue)
+(define (continue [prefill #f])
   (match-define (list history ... user (hash* ['role "assistant"] ['content fake]))
     (current-history))
   (current-history
    (parameterize ([current-history history])
-     (parameterize ([current-assistant-start fake])
+     (parameterize ([current-assistant-start
+                     (if prefill (string-append fake prefill) fake)])
        ((current-chat) user))
      (current-history))))
 
 (define (take-last-prompt)
   (match-define (list history ... (hash* ['role "user"] ['content content]) assistant)
     (current-history))
-  (define c (dynamic-require 'racket/gui/base 'the-clipboard))
-  (define t (current-milliseconds))
   (match (regexp-match #px"^```\n(.*)\n```(.*)$" content)
     [(list _ paste prompt)
      (current-paste-text paste)
-     (send c set-clipboard-string prompt t)]
-    [else (send c set-clipboard-string content t)])
+     (when (> (string-length prompt) 0)
+       (clip prompt))]
+    [else (clip content)])
   (current-history history))
 
 (module+ main
