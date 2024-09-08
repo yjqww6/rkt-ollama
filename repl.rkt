@@ -30,11 +30,17 @@
        (define t (init))
        (send c set-clipboard-string s t)])))
 
-(define (paste)
+(define (paste [append? #f])
   (define pasted (clip))
   (cond
     [(string? pasted)
-     (current-paste-text pasted)]
+     (cond
+       [(not append)
+        (current-paste-text pasted)]
+       [(current-paste-text)
+        =>
+        (λ (s) (current-paste-text (string-append s "\n" pasted)))]
+       [else (current-paste-text pasted)])]
     [pasted (current-image pasted)]
     [else (void)]))
 
