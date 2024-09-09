@@ -35,7 +35,7 @@
   (cond
     [(string? pasted)
      (cond
-       [(not append)
+       [(not append?)
         (current-paste-text pasted)]
        [(current-paste-text)
         =>
