@@ -154,7 +154,6 @@
    [("--no-preload") "don't ask to preload the model on startup" (set! no-preload #t)]
    [("--llama-cpp") tpl
                     "use llama.cpp chatter with template"
-                    (set! no-preload #t)
                     (namespace-require llama-cpp ns)
                     (case tpl
                       [("oai" "openai") (current-chat (make-default-chat (dynamic-require llama-cpp 'chat)))]
@@ -166,9 +165,10 @@
    [("-r" "--require") file "required file" (namespace-require file ns)])
 
   (unless no-preload
-    (set-box! preload-evt
-              (handle-evt (thread preload)
-                          (λ (v) (set-box! preload-evt always-evt)))))
+    (when (eq? (current-chat) default-chat)
+      (set-box! preload-evt
+                (handle-evt (thread preload)
+                            (λ (v) (set-box! preload-evt always-evt))))))
   
   (define (command-input? in)
     (regexp-match-peek #px"^\\s*," in))
