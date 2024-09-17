@@ -55,10 +55,7 @@
 
 (define current-make-prompt (make-parameter default-make-prompt))
 
-(define preload-evt (box always-evt))
-
 (define ((make-default-chat chat) s)
-  (sync (unbox preload-evt))
   (cond
     [(hash? s) (chat s)]
     [else
@@ -69,6 +66,15 @@
      (current-output-prefix #f)
      (current-paste-text #f)
      (current-image #f)]))
+
+(define (warmup)
+  (parameterize ([current-assistant-start (current-assistant-start)]
+                 [current-paste-text (current-paste-text)]
+                 [current-image (current-image)]
+                 [current-num-predict 0]
+                 [current-output-port (open-output-nowhere)]
+                 [current-chat-output-port #f])
+    ((current-chat) "")))
 
 (define default-chat (make-default-chat chat))
 (define generate-chat
@@ -140,7 +146,6 @@
   (define-runtime-module-path-index llama-cpp '(submod "main.rkt" llama-cpp))
 
   (port-count-lines! (current-output-port))
-  (define no-preload #f)
   (current-context-window 8192)
   (command-line
    #:program "rkt-ollama-repl"
@@ -151,7 +156,6 @@
    [("-c" "--context-window") c "context window size" (current-context-window (string->number c))]
    [("--host") h "ollama host" (current-host h)]
    [("--port") p "ollama port" (current-port (string->number p))]
-   [("--no-preload") "don't ask to preload the model on startup" (set! no-preload #t)]
    [("--llama-cpp") tpl
                     "use llama.cpp chatter with template"
                     (namespace-require llama-cpp ns)
@@ -163,12 +167,6 @@
                        (current-chat (make-default-chat (dynamic-require llama-cpp 'chat-by-completion)))])]
    #:multi
    [("-r" "--require") file "required file" (namespace-require file ns)])
-
-  (unless no-preload
-    (when (eq? (current-chat) default-chat)
-      (set-box! preload-evt
-                (handle-evt (thread preload)
-                            (λ (v) (set-box! preload-evt always-evt))))))
   
   (define (command-input? in)
     (regexp-match-peek #px"^\\s*," in))

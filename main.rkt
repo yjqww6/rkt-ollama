@@ -4,7 +4,7 @@
          syntax/parse/define
          racket/string racket/match)
 (provide (all-from-out "private/config.rkt" "private/history.rkt" "private/log.rkt")
-         chat generate undo clear preload
+         chat generate undo clear
          current-chat-output-port current-assistant-start
          with-cust)
 
@@ -66,11 +66,6 @@
         [(hash* ['context new-ctx])
          (current-context new-ctx)]
         [else (void)]))
-    (void)))
-
-(define (preload)
-  (parameterize ([current-tools #f])
-    (p:chat '())
     (void)))
 
 (module+ llama-cpp
