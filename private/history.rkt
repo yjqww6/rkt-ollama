@@ -4,6 +4,12 @@
 
 (define current-history (make-parameter '()))
 
+(define (save-history [path "history.rktd"])
+  (call-with-output-file path (λ (p) (write (current-history) p))))
+
+(define (restore-history [path "history.rktd"])
+  (call-with-input-file path (λ (p) (current-history (read p)))))
+
 (define (make-system system)
   (and system (hasheq 'role "system" 'content system)))
 
