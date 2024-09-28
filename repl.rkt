@@ -159,6 +159,7 @@
    [("--llama-cpp") tpl
                     "use llama.cpp chatter with template"
                     (namespace-require llama-cpp ns)
+                    (default-endpoint (cons "localhost" 8080))
                     (case tpl
                       [("oai" "openai") (current-chat (make-default-chat (dynamic-require llama-cpp 'chat)))]
                       [else
@@ -166,7 +167,8 @@
                         (dynamic-require llama-cpp (string->symbol (string-append "template:" tpl))))
                        (current-chat (make-default-chat (dynamic-require llama-cpp 'chat-by-completion)))])]
    #:multi
-   [("-r" "--require") file "required file" (namespace-require file ns)])
+   [("-r" "--require") file "required file" (namespace-require file ns)]
+   [("-e" "--expr") expr "expression" (eval (read (open-input-string expr)) ns)])
   
   (define (command-input? in)
     (regexp-match-peek #px"^\\s*," in))

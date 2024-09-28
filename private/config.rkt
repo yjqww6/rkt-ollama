@@ -19,8 +19,16 @@
 (define current-stream (make-parameter #t))
 (define current-response-format (make-parameter #f))
 
-(define current-host (make-parameter "localhost"))
-(define current-port (make-parameter 11434))
+(define default-endpoint (make-parameter (cons "localhost" 11434)))
+
+(define current-host (make-derived-parameter
+                      (make-parameter #f)
+                      values
+                      (λ (v) (or v (car (default-endpoint))))))
+(define current-port (make-derived-parameter
+                      (make-parameter #f)
+                      values
+                      (λ (v) (or v (cdr (default-endpoint))))))
 (define current-verbose (make-parameter #f))
 (define break-prompt-tag (make-continuation-prompt-tag))
 
@@ -36,7 +44,7 @@
              (λ (o) (hash-remove o key))]
             [else #f]))
    (λ (v) (cond
-            [(opt)
+            [v
              =>
              (λ (c) (hash-ref c key #f))]
             [else #f]))))
