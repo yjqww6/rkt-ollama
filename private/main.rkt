@@ -52,7 +52,7 @@
      'format (current-response-format)))
   (response (send "/api/chat" data)))
 
-(define (call/interupt proc empty)
+(define (call/interrupt proc empty)
   (with-handlers* ([(λ (e) (and (exn:break? e)
                                 (continuation-prompt-available? break-prompt-tag)))
                     (λ (e)
@@ -88,7 +88,7 @@
      (define resp (chat messages))
      (when before (before resp))
      (begin0
-       (call/interupt
+       (call/interrupt
         (λ ()
           (for/last ([j resp]
                      #:final (hash-ref j 'done #f))
@@ -260,7 +260,7 @@
     (define sp (open-output-string))
     (define resp (chat messages))
     (let/ec k
-      (call/interupt
+      (call/interrupt
        (λ ()
          (for ([j resp])
            (match j
@@ -319,7 +319,7 @@
        (define resp (response/producer p (reciever p)))
        (when fake
          (write-string fake output))
-       (call/interupt
+       (call/interrupt
         (λ ()
           (let/ec k
             (for ([j resp])

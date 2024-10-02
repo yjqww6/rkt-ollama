@@ -106,7 +106,4 @@
       (completion/history/output (build-message "user" items)
                                  output
                                  #:assistant-start fake)
-      (void)))
-
-  (require (prefix-in template: "private/chat-template.rkt"))
-  (provide (all-from-out "private/chat-template.rkt")))
+      (void))))

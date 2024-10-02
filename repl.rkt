@@ -144,6 +144,7 @@
            (for-syntax racket/base))
   (define ns (namespace-anchor->namespace here))
   (define-runtime-module-path-index llama-cpp '(submod "main.rkt" llama-cpp))
+  (define-runtime-module-path-index llama-cpp-template "private/chat-template.rkt")
 
   (port-count-lines! (current-output-port))
   (current-context-window 8192)
@@ -164,7 +165,7 @@
                       [("oai" "openai") (current-chat (make-default-chat (dynamic-require llama-cpp 'chat)))]
                       [else
                        ((dynamic-require llama-cpp 'current-chat-template)
-                        (dynamic-require llama-cpp (string->symbol (string-append "template:" tpl))))
+                        (dynamic-require llama-cpp-template (string->symbol tpl)))
                        (current-chat (make-default-chat (dynamic-require llama-cpp 'chat-by-completion)))])]
    #:multi
    [("-r" "--require") file "required file" (namespace-require file ns)]
