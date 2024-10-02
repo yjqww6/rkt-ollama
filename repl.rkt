@@ -179,10 +179,6 @@
     (regexp-match-peek #px"^\"\"\"" in))
   (define multi-input-end #px"(\r\n|\n|\r)\"\"\"$")
 
-  ;; may reach the limit of type ahead buffer
-  (define (multi-line? in)
-    (regexp-match-peek #px"^'''" in))
-
   (define (multi-line-paste? in)
     (regexp-match-peek #px"^```(\r\n|\n|\r|$)" in))
   (define multi-input-paste-end #px"(\r\n|\n|\r)```$")
@@ -191,26 +187,11 @@
     (read-bytes (bytes-length (car p)) in))
   (struct message (content))
   (struct cmd (content))
-  (struct lines (first))
 
   (define uploaded! #f)
-  (struct uploaded ())
+  (struct refreshing ())
 
   (define running? (make-parameter #f))
-
-  (define (read-multi-line first)
-    (define o (open-output-string))
-    (write-string first o)
-    (with-handlers ([exn:break? (λ (_) #f)])
-      (let f ()
-        (define v (read-line))
-        (cond
-          [(or (eof-object? v) (string=? v "'''"))
-           (get-output-string o)]
-          [else
-           (newline o)
-           (write-string v o)
-           (f)]))))
 
   (define (run thunk)
     (call-with-continuation-prompt
@@ -230,23 +211,22 @@
   ;; prefixes
   ;; , starts a racket command
   ;; """ starts multi line block in expeditor without triggering shortcuts
-  ;; ''' starts multi line block with read-line
   ;;; ^ starts a output prefix
   (define (reader orig)
     (lambda (in)
       (cond
         [uploaded!
          (set! uploaded! #f)
-         (uploaded)]
+         (refreshing)]
         [(eof-object? (peek-byte in)) eof]
         [(eqv? #\^ (peek-char in))
          (read-char in)
          (current-output-prefix (port->string in))
-         (uploaded)]
+         (refreshing)]
         [(eqv? #\$ (peek-char in))
          (read-char in)
          (current-system (port->string in))
-         (uploaded)]
+         (refreshing)]
         [(eqv? #\! (peek-char in))
          (read-char in)
          (cmd (port->string in))]
@@ -263,17 +243,12 @@
          (λ (p)
            (forward p in)
            (message (car (regexp-split multi-input-end (port->string in)))))]
-        [(multi-line? in)
-         =>
-         (λ (p)
-           (forward p in)
-           (lines (port->string in)))]
         [(multi-line-paste? in)
          =>
          (λ (p)
            (forward p in)
            (current-paste-text (car (regexp-split multi-input-paste-end (port->string in))))
-           (uploaded))]
+           (refreshing))]
         [else
          (message (port->string in))])))
 
@@ -295,7 +270,6 @@
          (λ (p)
            (forward p in)
            (regexp-match? multi-input-paste-end in))]
-        [(multi-line? in) #t]
         [else #t])))
 
   (when (terminal-port? (current-input-port))
@@ -340,12 +314,7 @@
                     ">>>")))
         (cond
           [(eof-object? v) (expeditor-close ee)]
-          [(uploaded? v) (loop)]
-          [(lines? v)
-           (define s (read-multi-line (lines-first v)))
-           (when (string? s)
-             (run-chat s))
-           (loop)]
+          [(refreshing? v) (loop)]
           [(message? v)
            (run-chat (message-content v))
            (loop)]
