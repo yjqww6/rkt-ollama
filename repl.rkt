@@ -142,9 +142,13 @@
   (require expeditor (submod expeditor configure)
            racket/port racket/cmdline racket/runtime-path
            (for-syntax racket/base))
-  (define ns (namespace-anchor->namespace here))
+  (define-runtime-module-path-index repl '(submod ".."))
   (define-runtime-module-path-index llama-cpp '(submod "main.rkt" llama-cpp))
   (define-runtime-module-path-index llama-cpp-template "private/chat-template.rkt")
+
+  (define ns (namespace-anchor->empty-namespace here))
+  (namespace-require 'racket ns)
+  (namespace-require repl ns)
 
   (port-count-lines! (current-output-port))
   (current-context-window 8192)
