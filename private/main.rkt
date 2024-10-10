@@ -230,6 +230,7 @@
      'repeat_penalty (current-repeat-penalty)
      'repeat_last_n (current-repeat-last-n)
      'max_tokens (current-num-predict)
+     'stop (current-stop)
      (current-options)))
 
   (define ((reciever port))

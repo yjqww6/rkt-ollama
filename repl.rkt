@@ -170,6 +170,7 @@
                       [else
                        ((dynamic-require llama-cpp 'current-chat-template)
                         (dynamic-require llama-cpp-template (string->symbol tpl)))
+                       (current-stop (dynamic-require llama-cpp-template (string->symbol (string-append tpl "/stop")) (λ () #f)))
                        (current-chat (make-default-chat (dynamic-require llama-cpp 'chat-by-completion)))])]
    #:multi
    [("-r" "--require") file "required file" (namespace-require file ns)]

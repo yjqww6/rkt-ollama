@@ -1,6 +1,6 @@
 #lang racket/base
 (require racket/list)
-(provide chatml llama3 gemma2)
+(provide chatml llama3 gemma2 minitron minitron/stop)
 ;;;; mostly for llama.cpp prefill
 
 (define (split-messages messages [merge-system? #t])
@@ -59,3 +59,17 @@
                (hash-ref prefill 'content)
                ""))
   (get-output-string s))
+
+(define (minitron messages)
+  (define s (open-output-string))
+  (define-values (sys msgs prefill) (split-messages messages #f))
+  (when sys
+    (fprintf s "<extra_id_0>System~%~a~%~%" sys))
+  (for ([msg (in-list msgs)])
+    (if (string=? (hash-ref msg 'role) "user")
+        (fprintf s "<extra_id_1>User~%~a~%" (hash-ref msg 'content))
+        (fprintf s "<extra_id_1>Assistant~%~a" (hash-ref msg 'content))))
+  (fprintf s "<extra_id_1>Assistant~%~a" (if prefill (hash-ref prefill 'content) ""))
+  (get-output-string s))
+
+(define minitron/stop '("<extra_id_1>"))

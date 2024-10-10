@@ -61,4 +61,5 @@
   [current-min-p min_p]
   [current-top-k top_k]
   [current-seed seed]
-  [current-num-predict num_predict])
+  [current-num-predict num_predict]
+  [current-stop stop])
