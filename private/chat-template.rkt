@@ -1,5 +1,5 @@
 #lang racket/base
-(require racket/list)
+(require racket/list racket/sequence racket/string)
 (provide chatml llama3 gemma2 minitron minitron/stop)
 ;;;; mostly for llama.cpp prefill
 
@@ -16,60 +16,70 @@
       [sys (values (cons sys msgs) prefill)]
       [else (values msgs prefill)])))
 
+(define (in-messages msgs #:user [user #f] #:assistant [assistant #f])
+  (sequence-map
+   (λ (msg)
+     (define role (hash-ref msg 'role))
+     (values (cond
+               [(string=? role "user") (or user role)]
+               [(string=? role "assistant") (or assistant role)]
+               [else role])
+             (string-trim (hash-ref msg 'content) #:left? #f)))
+   msgs))
+
+(define (prefill-content msg)
+  (if msg (hash-ref msg 'content) ""))
+
+(define (inject-system-to-first-user msgs system [inject #f])
+  (define (default-inject sys usr)
+    (string-append sys "\n\n" usr))
+  (cond
+    [(not system) msgs]
+    [else
+     (let loop ([msgs msgs])
+       (cond
+         [(null? msgs) '()]
+         [(string=? (hash-ref (car msgs) 'role) "user")
+          (cons
+           (hash-set (car msgs) 'content
+                     ((or inject default-inject) (hash-ref system 'content)
+                                                 (hash-ref (car msgs) 'content)))
+           (cdr msgs))]
+         [else (cons (car msgs) (loop (cdr msgs)))]))]))
+
 (define (chatml messages)
   (define s (open-output-string))
   (define-values (msgs prefill) (split-messages messages))
-  (for ([msg (in-list msgs)])
-    (fprintf s "<|im_start|>~a\n~a<|im_end|>\n"
-             (hash-ref msg 'role) (hash-ref msg 'content)))
-  (fprintf s "<|im_start|>assistant\n~a"
-           (if prefill
-               (hash-ref prefill 'content)
-               ""))
+  (for ([(role content) (in-messages msgs)])
+    (fprintf s "<|im_start|>~a\n~a<|im_end|>\n" role content))
+  (fprintf s "<|im_start|>assistant\n~a" (prefill-content prefill))
   (get-output-string s))
 
 (define (llama3 messages)
   (define s (open-output-string))
   (define-values (msgs prefill) (split-messages messages))
-  (for ([msg (in-list msgs)])
-    (fprintf s "<|start_header_id|>~a<|end_header_id|>\n\n~a<|eot_id|>"
-             (hash-ref msg 'role) (hash-ref msg 'content)))
-  (fprintf s "<|start_header_id|>assistant<|end_header_id|>\n\n~a"
-           (if prefill
-               (hash-ref prefill 'content)
-               ""))
+  (for ([(role content) (in-messages msgs)])
+    (fprintf s "<|start_header_id|>~a<|end_header_id|>\n\n~a<|eot_id|>" role content))
+  (fprintf s "<|start_header_id|>assistant<|end_header_id|>\n\n~a" (prefill-content prefill))
   (get-output-string s))
 
 (define (gemma2 messages)
   (define s (open-output-string))
   (define-values (sys msgs prefill) (split-messages messages #f))
-  (for/fold ([sys sys])
-            ([msg (in-list msgs)]
-             [i (in-naturals)])
-    (define role
-      (let ([r (hash-ref msg 'role)])
-        (if (string=? r "assistant") "model" r)))
+  (for ([(role content) (in-messages (inject-system-to-first-user msgs sys) #:assistant "model")])
     (fprintf s "<start_of_turn>~a\n~a<end_of_turn>\n"
-             role (if (and sys (string=? role "user"))
-                      (string-append (hash-ref sys 'content) "\n\n" (hash-ref msg 'content))
-                      (hash-ref msg 'content)))
-    (and sys (not (string=? role "user"))))
-  (fprintf s "<start_of_turn>model\n~a"
-           (if prefill
-               (hash-ref prefill 'content)
-               ""))
+             role content))
+  (fprintf s "<start_of_turn>model\n~a" (prefill-content prefill))
   (get-output-string s))
 
 (define (minitron messages)
   (define s (open-output-string))
   (define-values (sys msgs prefill) (split-messages messages #f))
   (when sys
-    (fprintf s "<extra_id_0>System~%~a~%~%" sys))
-  (for ([msg (in-list msgs)])
-    (if (string=? (hash-ref msg 'role) "user")
-        (fprintf s "<extra_id_1>User~%~a~%" (hash-ref msg 'content))
-        (fprintf s "<extra_id_1>Assistant~%~a" (hash-ref msg 'content))))
-  (fprintf s "<extra_id_1>Assistant~%~a" (if prefill (hash-ref prefill 'content) ""))
+    (fprintf s "<extra_id_0>System~%~a~%~%" (hash-ref sys 'content)))
+  (for ([(role content) (in-messages msgs #:user "User" #:assistant "Assistant")])
+    (fprintf s "<extra_id_1>~a~%~a~%" role content))
+  (fprintf s "<extra_id_1>Assistant~%~a" (prefill-content prefill))
   (get-output-string s))
 
 (define minitron/stop '("<extra_id_1>"))
