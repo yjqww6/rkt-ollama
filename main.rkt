@@ -1,10 +1,8 @@
 #lang racket/base
 (require "private/config.rkt" "private/history.rkt" "private/image.rkt" "private/log.rkt"
-         (prefix-in p: "private/main.rkt")
          syntax/parse/define
          racket/string racket/match)
 (provide (all-from-out "private/config.rkt" "private/history.rkt" "private/log.rkt")
-         chat generate undo clear
          current-chat-output-port current-assistant-start
          with-cust)
 
@@ -48,29 +46,32 @@
 
 (define current-assistant-start (make-parameter #f))
 
-(define (chat #:output [output (current-chat-output-port)]
-              #:start [fake (current-assistant-start)]
-              . items)
-  (with-cust _
-    (p:chat/history/output (build-message "user" items) output #:assistant-start fake)
-    (void)))
+(module+ ollama
+  (require "private/main.rkt")
+  (provide chat generate)
+  (define (chat #:output [output (current-chat-output-port)]
+                #:start [fake (current-assistant-start)]
+                . items)
+    (with-cust _
+      (chat/history/output (build-message "user" items) output #:assistant-start fake)
+      (void)))
 
-(define (generate #:output [output (current-chat-output-port)] #:raw? [raw #f] #:use-context? [use-context #f]
-                  . items)
-  (define-values (prompt images) (collect items))
-  (with-cust _
-    (define r (p:generate/output prompt output #:images images #:raw? raw
-                                 #:context (and use-context (current-context))))
-    (when use-context
-      (match r
-        [(hash* ['context new-ctx])
-         (current-context new-ctx)]
-        [else (void)]))
-    (void)))
+  (define (generate #:output [output (current-chat-output-port)] #:raw? [raw #f] #:use-context? [use-context #f]
+                    . items)
+    (define-values (prompt images) (collect items))
+    (with-cust _
+      (define r (generate/output prompt output #:images images #:raw? raw
+                                   #:context (and use-context (current-context))))
+      (when use-context
+        (match r
+          [(hash* ['context new-ctx])
+           (current-context new-ctx)]
+          [else (void)]))
+      (void))))
 
 (module+ llama-cpp
-  (require (submod "private/main.rkt" llama-cpp))
-  (provide chat completion chat-by-completion (all-from-out (submod "private/main.rkt" llama-cpp)))
+  (require "private/llama-cpp-endpoint.rkt")
+  (provide chat completion chat-by-completion (all-from-out "private/llama-cpp-endpoint.rkt"))
   
   (define (call/prefill-workaround fake f)
     (cond

@@ -76,15 +76,7 @@
                  [current-chat-output-port #f])
     ((current-chat) "")))
 
-(define default-chat (make-default-chat chat))
-(define generate-chat
-  (make-default-chat
-   (λ (s)
-     (when (current-assistant-start)
-       (error 'generate-chat "unsupported"))
-     (generate s #:use-context? #t))))
-
-(define current-chat (make-parameter default-chat))
+(define current-chat (make-parameter #f))
 
 (define current-say-command (make-parameter "say"))
 (define (say str)
@@ -94,7 +86,7 @@
      (current-say-command)))
   (f 'wait))
 
-(define say-chat
+(define (make-say-chat chat)
   (λ (s)
     (define-values (in out) (make-pipe))
     (with-cust _
@@ -104,7 +96,7 @@
            (for ([line (in-lines in)])
              (say line)))))
       (parameterize ([current-chat-output-port (combine-output (current-chat-output-port) out)])
-        (default-chat s)
+        (chat s)
         (close-output-port out)
         (thread-wait thr)))))
 
@@ -143,6 +135,7 @@
            racket/port racket/cmdline racket/runtime-path
            (for-syntax racket/base))
   (define-runtime-module-path-index repl '(submod ".."))
+  (define-runtime-module-path-index ollama '(submod "main.rkt" ollama))
   (define-runtime-module-path-index llama-cpp '(submod "main.rkt" llama-cpp))
   (define-runtime-module-path-index llama-cpp-template "private/chat-template.rkt")
 
@@ -175,6 +168,10 @@
    #:multi
    [("-r" "--require") file "required file" (namespace-require file ns)]
    [("-e" "--expr") expr "expression" (eval (read (open-input-string expr)) ns)])
+
+  (unless (current-chat)
+    (namespace-require ollama ns)
+    (current-chat (make-default-chat (dynamic-require ollama 'chat))))
   
   (define (command-input? in)
     (regexp-match-peek #px"^\\s*," in))
