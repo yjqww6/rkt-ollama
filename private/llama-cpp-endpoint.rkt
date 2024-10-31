@@ -1,6 +1,6 @@
 #lang racket/base
 (require "config.rkt" "common.rkt" "log.rkt" "history.rkt")
-(require racket/string racket/match json)
+(require racket/string racket/match racket/port json)
 (provide chat/history/output completion/output current-options current-grammar
          current-chat-template completion/history/output)
 (define current-options (make-parameter (hasheq 'cache_prompt #t)))
@@ -39,39 +39,30 @@
   (response/producer p (reciever p)))
 
 (define (chat/history/output message output)
-  (define messages
-    (append-history
-     (make-system (current-system))
-     (current-history)
-     message))
-  (define sp (open-output-string))
-  (define resp (chat messages))
-  (let/ec k
-    (call/interrupt
-     (λ ()
-       (for ([j resp])
-         (match j
-           [(hash* ['choices (list (or (hash* ['delta (hash* ['content content])])
-                                       (hash* ['message (hash* ['content content])])) _ ...)])
-            (write-string content sp)
-            (write-string content output)
-            (flush-output output)]
-           [(hash* ['choices (list (hash* ['finish_reason (? string?)]) _ ...)])
+  (call/history
+   message
+   (λ (messages sp)
+     (define resp (chat messages))
+     (let/ec k
+       (call/interrupt
+        (λ ()
+          (for ([j resp])
             (match j
-              [(hash* ['usage (hash* ['completion_tokens eval_count] ['prompt_tokens prompt_eval_count])])
-               (log-perf-trace (perf prompt_eval_count eval_count #f #f #f #f))]
-              [else (void)])
-            (k)]
-           [(hash* ['error _])
-            (error 'chat "~a" j)])))
-     void))
-  (close-response resp)
-  (current-history
-   (append-history
-    (current-history)
-    message
-    (hasheq 'role "assistant"
-            'content (get-output-string sp)))))
+              [(hash* ['choices (list (or (hash* ['delta (hash* ['content content])])
+                                          (hash* ['message (hash* ['content content])])) _ ...)])
+               (write-string content sp)
+               (write-string content output)
+               (flush-output output)]
+              [(hash* ['choices (list (hash* ['finish_reason (? string?)]) _ ...)])
+               (match j
+                 [(hash* ['usage (hash* ['completion_tokens eval_count] ['prompt_tokens prompt_eval_count])])
+                  (log-perf-trace (perf prompt_eval_count eval_count #f #f #f #f))]
+                 [else (void)])
+               (k)]
+              [(hash* ['error _])
+               (error 'chat "~a" j)])))
+        void))
+     (hasheq 'message (hasheq 'role "assistant")))))
 
 (define (completion/output prompt output)
   (define data (hash-set (build-options) 'prompt prompt))
@@ -101,30 +92,6 @@
    message
    (λ (messages sp)
      (define prompt (template messages))
-     (define data (hash-set (build-options) 'prompt prompt))
-     (define p (send "/completion" data))
-     (define resp (response/producer p (reciever p)))
-     (when fake
-       (write-string fake output))
-     (call/interrupt
-      (λ ()
-        (let/ec k
-          (for ([j resp])
-            (match j
-              [(hash* ['content content] ['stop stop])
-               (write-string content sp)
-               (write-string content output)
-               (flush-output output)
-               (when stop
-                 (match j
-                   [(hash* ['tokens_evaluated prompt-tokens] ['tokens_predicted eval-tokens]
-                           ['timings (hash* ['prompt_ms prompt-duration] ['predicted_ms eval-duration]
-                                            ['prompt_per_second prompt-tokens-per-second]
-                                            ['predicted_per_second eval-tokens-per-seoncd])])
-                    (log-perf-trace (perf prompt-tokens eval-tokens (/ prompt-duration 1e3) (/ eval-duration 1e3)
-                                          prompt-tokens-per-second eval-tokens-per-seoncd))])
-                 (k))])))
-        (close-response resp)
-        (hasheq 'message (hasheq 'role "assistant")))
-      (λ () (hasheq 'message (hasheq 'role "assistant")))))
+     (completion/output prompt (combine-output sp output))
+     (hasheq 'message (hasheq 'role "assistant")))
    #:assistant-start fake))
