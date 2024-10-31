@@ -149,7 +149,7 @@
    #:program "rkt-ollama-repl"
    #:once-each
    [("-m" "--model") m "default model" (current-model m)]
-   [("-s" "--system") s "system prompt" (current-system s)]
+   [("-s" "--system") s "system prompt" (default-system s)]
    [("-v" "--verbose") "verbose messages" (current-verbose #t)]
    [("-c" "--context-window") c "context window size" (current-context-window (string->number c))]
    [("--host") h "ollama host" (current-host h)]
@@ -228,7 +228,7 @@
          (refreshing)]
         [(eqv? #\$ (peek-char in))
          (read-char in)
-         (current-system (port->string in))
+         (use-system (port->string in))
          (refreshing)]
         [(eqv? #\! (peek-char in))
          (read-char in)

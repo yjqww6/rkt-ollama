@@ -84,7 +84,7 @@
   (define data
     (hash-param 'model (current-model)
                 'prompt prompt
-                'system (current-system)
+                'system (default-system)
                 'images images
                 'options (current-options)
                 'stream (box (current-stream))

@@ -28,6 +28,18 @@
       [(cons m r) (cons m (f r))]
       ['() '()])))
 
+(define (use-system sys)
+  (current-history (prepend-system sys (current-history) #:replace? #t)))
+
+(define (prepend-system sys history #:replace? replace?)
+  (match history
+    [(cons (hash* ['role "system"]) h)
+     (if (not replace?)
+         history
+         (if sys (cons (make-system sys) h) h))]
+    [h
+     (if sys (cons (make-system sys) h) h)]))
+
 (define (undo)
   (let loop ([ls (reverse (current-history))])
     (match ls

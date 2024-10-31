@@ -14,7 +14,7 @@
        [else h])]))
 
 (define current-model (make-parameter "gemma2"))
-(define current-system (make-parameter #f))
+(define default-system (make-parameter #f))
 (define current-tools (make-parameter #f))
 (define current-stream (make-parameter #t))
 (define current-response-format (make-parameter #f))
