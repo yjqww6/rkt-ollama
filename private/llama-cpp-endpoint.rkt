@@ -9,6 +9,7 @@
 (define (build-options)
   (hash-param
    'stream (box (current-stream))
+   'stream_options (and (current-stream) (hasheq 'include_usage #t))
    'temperature (current-temperature)
    'top_k (current-top-k)
    'top_p (current-top-p)
@@ -48,16 +49,17 @@
         (λ ()
           (for ([j resp])
             (match j
+              [(hash* ['usage (hash* ['completion_tokens eval_count] ['prompt_tokens prompt_eval_count])])
+               (log-perf-trace (perf prompt_eval_count eval_count #f #f #f #f))]
+              [else (void)])
+            (match j
               [(hash* ['choices (list (or (hash* ['delta (hash* ['content content])])
                                           (hash* ['message (hash* ['content content])])) _ ...)])
                (write-string content sp)
                (write-string content output)
                (flush-output output)]
+              [(hash* ['choices '()]) (void)]
               [(hash* ['choices (list (hash* ['finish_reason (? string?)]) _ ...)])
-               (match j
-                 [(hash* ['usage (hash* ['completion_tokens eval_count] ['prompt_tokens prompt_eval_count])])
-                  (log-perf-trace (perf prompt_eval_count eval_count #f #f #f #f))]
-                 [else (void)])
                (k)]
               [(hash* ['error _])
                (error 'chat "~a" j)])))
