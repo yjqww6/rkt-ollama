@@ -47,6 +47,19 @@
       [(cons (hash* ['role "user"]) r) (current-history (reverse r))]
       [(cons m r) (loop r)])))
 
+(define (shift)
+  (define (f h)
+    (let loop ([h h])
+      (match h
+        ['() '()]
+        [(cons (hash* ['role "assistant"]) r) r]
+        [(cons m r) (loop r)])))
+  (current-history
+   (match (current-history)
+     [(cons (and s (hash* ['role "system"])) h)
+      (cons s (f h))]
+     [h (f h)])))
+
 (define (clear)
   (current-history '())
   (current-context #f))
