@@ -52,5 +52,4 @@
        [(cons m r) (loop r)]))))
 
 (define (clear)
-  (current-history '())
-  (current-system #f))
+  (current-history '()))
