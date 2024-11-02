@@ -77,6 +77,9 @@
     ((current-chat) "")))
 
 (define current-chat (make-parameter #f))
+(define current-repl (make-parameter #f))
+(define (repl)
+  ((current-repl)))
 
 (define current-say-command (make-parameter "say"))
 (define (say str)
@@ -129,6 +132,14 @@
        (clip prompt))]
     [else (clip content)])
   (current-history history))
+
+(define (default-repl-prompt)
+  (string-append
+   (if (current-paste-text) "text " "")
+   (if (current-image) "img " "")
+   (if (current-output-prefix) "pre " "")
+   ">>>"))
+(define current-repl-prompt (make-parameter default-repl-prompt))
 
 (module+ main
   (require expeditor (submod expeditor configure)
@@ -309,17 +320,10 @@
                     (reader (current-expeditor-reader))]
                    [current-expeditor-ready-checker
                     (ready (current-expeditor-ready-checker))])
-      (let loop ()
-        (define v (expeditor-read
-                   ee
-                   #:prompt
-                   (string-append
-                    (if (current-paste-text) "text " "")
-                    (if (current-image) "img " "")
-                    (if (current-output-prefix) "pre " "")
-                    ">>>")))
+      (define (loop)
+        (define v (expeditor-read ee #:prompt ((current-repl-prompt))))
         (cond
-          [(eof-object? v) (expeditor-close ee)]
+          [(eof-object? v) (void)]
           [(refreshing? v) (loop)]
           [(message? v)
            (run-chat (message-content v))
@@ -336,5 +340,7 @@
                  (for ([v (in-list r)])
                    (unless (void? v)
                      (println v)))))))
-           (loop)])))
-    (void)))
+           (loop)]))
+      (current-repl loop)
+      (loop))
+    (void (expeditor-close ee))))
