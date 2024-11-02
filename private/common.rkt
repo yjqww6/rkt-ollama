@@ -62,11 +62,14 @@
     (write-string fake sp))
   (define result (proc messages sp))
   (current-history
-   (append-history
-    (current-history)
-    message
-    (hash-set (hash-ref result 'message)
-              'content (get-output-string sp)))))
+   (prepend-system
+    (default-system)
+    (append-history
+     (current-history)
+     message
+     (hash-set (hash-ref result 'message)
+               'content (get-output-string sp)))
+    #:replace? #f)))
 
 (define (perf-trace j)
   (match j
