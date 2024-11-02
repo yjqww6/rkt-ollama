@@ -61,7 +61,4 @@
      [h (f h)])))
 
 (define (clear)
-  (current-history '())
-  (current-context #f))
-
-(define current-context (make-parameter #f))
+  (current-history '()))

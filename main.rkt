@@ -48,7 +48,7 @@
 
 (module+ ollama
   (require "private/main.rkt")
-  (provide chat generate)
+  (provide chat completion)
   (define (chat #:output [output (current-chat-output-port)]
                 #:start [fake (current-assistant-start)]
                 . items)
@@ -56,17 +56,11 @@
       (chat/history/output (build-message "user" items) output #:assistant-start fake)
       (void)))
 
-  (define (generate #:output [output (current-chat-output-port)] #:raw? [raw #f] #:use-context? [use-context #f]
+  (define (completion #:output [output (current-chat-output-port)]
                     . items)
     (define-values (prompt images) (collect items))
     (with-cust _
-      (define r (generate/output prompt output #:images images #:raw? raw
-                                   #:context (and use-context (current-context))))
-      (when use-context
-        (match r
-          [(hash* ['context new-ctx])
-           (current-context new-ctx)]
-          [else (void)]))
+      (generate/output prompt output #:images images #:raw? #t)
       (void))))
 
 (module+ llama-cpp
