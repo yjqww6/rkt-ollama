@@ -50,26 +50,21 @@
 
 (define (call/history message proc #:assistant-start [fake #f])
   (define messages
-    (prepend-system
-     (default-system)
-     (append-history
-      (current-history)
-      message
-      (fake-assistant fake))
-     #:replace? #f))
+    (append-history
+     (make-system (current-system))
+     (current-history)
+     message
+     (fake-assistant fake)))
   (define sp (open-output-string))
   (when fake
     (write-string fake sp))
   (define result (proc messages sp))
   (current-history
-   (prepend-system
-    (default-system)
-    (append-history
-     (current-history)
-     message
-     (hash-set (hash-ref result 'message)
-               'content (get-output-string sp)))
-    #:replace? #f)))
+   (append-history
+    (current-history)
+    message
+    (hash-set (hash-ref result 'message)
+              'content (get-output-string sp)))))
 
 (define (perf-trace j)
   (match j

@@ -172,6 +172,9 @@
   (unless (current-chat)
     (namespace-require ollama ns)
     (current-chat (make-default-chat (dynamic-require ollama 'chat))))
+
+  (cond
+    [(default-system) => current-system])
   
   (define (command-input? in)
     (regexp-match-peek #px"^\\s*," in))
@@ -228,7 +231,7 @@
          (refreshing)]
         [(eqv? #\$ (peek-char in))
          (read-char in)
-         (use-system (port->string in))
+         (current-system (port->string in))
          (refreshing)]
         [(eqv? #\! (peek-char in))
          (read-char in)

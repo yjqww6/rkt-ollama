@@ -2,13 +2,21 @@
 (require racket/match)
 (provide (all-defined-out))
 
+(define current-system (make-parameter #f))
 (define current-history (make-parameter '()))
 
 (define (save-history [path "history.rktd"])
-  (call-with-output-file path (λ (p) (write (current-history) p))))
+  (call-with-output-file path
+    (λ (p) (write (hasheq 'system (current-system) 'history (current-history)) p))))
 
 (define (restore-history [path "history.rktd"])
-  (call-with-input-file path (λ (p) (current-history (read p)))))
+  (call-with-input-file
+      path
+    (λ (p)
+      (match (read p)
+        [(hash* ['system s] ['history h])
+         (current-system s)
+         (current-history h)]))))
 
 (define (make-system system)
   (and system (hasheq 'role "system" 'content system)))
@@ -28,18 +36,6 @@
       [(cons m r) (cons m (f r))]
       ['() '()])))
 
-(define (use-system sys)
-  (current-history (prepend-system sys (current-history) #:replace? #t)))
-
-(define (prepend-system sys history #:replace? replace?)
-  (match history
-    [(cons (hash* ['role "system"]) h)
-     (if (not replace?)
-         history
-         (if sys (cons (make-system sys) h) h))]
-    [h
-     (if sys (cons (make-system sys) h) h)]))
-
 (define (undo)
   (let loop ([ls (reverse (current-history))])
     (match ls
@@ -48,17 +44,13 @@
       [(cons m r) (loop r)])))
 
 (define (shift)
-  (define (f h)
-    (let loop ([h h])
-      (match h
-        ['() '()]
-        [(cons (hash* ['role "assistant"]) r) r]
-        [(cons m r) (loop r)])))
   (current-history
-   (match (current-history)
-     [(cons (and s (hash* ['role "system"])) h)
-      (cons s (f h))]
-     [h (f h)])))
+   (let loop ([h (current-history)])
+     (match h
+       ['() '()]
+       [(cons (hash* ['role "assistant"]) r) r]
+       [(cons m r) (loop r)]))))
 
 (define (clear)
-  (current-history '()))
+  (current-history '())
+  (current-system #f))
