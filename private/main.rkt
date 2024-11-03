@@ -1,8 +1,8 @@
 #lang racket/base
 (require "config.rkt" "history.rkt" "log.rkt" "common.rkt"
-         racket/match racket/generator json)
+         racket/match racket/port json)
 (provide  generate chat
-          chat/history/output chat/history generate/output
+          chat/history/output generate/output
           embeddings list-models)
 
 (define (chat messages)
@@ -16,65 +16,40 @@
      'format (current-response-format)))
   (response (send "/api/chat" data)))
 
-(define (chat-with-history message proc #:before [before #f] #:after [after #f]
-                           #:assistant-start [fake #f])
+(define (handle-chat-response resp output)
+  (for ([j resp]
+        #:final (hash-ref j 'done #f))
+    (perf-trace j)
+    (match j
+      [(hash* ['message (hash* ['content content])])
+       (write-string content output)
+       (flush-output output)]
+      [(hash* ['error err])
+       (error 'chat/history "~a" err)])))
+
+(define (chat/history/output message output
+                             #:assistant-start [fake #f])
   (call/history
    message
    (λ (messages sp)
      (define resp (chat messages))
-     (when before (before resp))
+     (when fake (write-string fake output))
      (begin0
        (call/interrupt
         (λ ()
-          (for/last ([j resp]
-                     #:final (hash-ref j 'done #f))
-            (perf-trace j)
-            (match j
-              [(hash* ['message (hash* ['content content])])
-               (write-string content sp)
-               (proc content j)
-               j]
-              [(hash* ['error err])
-               (error 'chat/history "~a" err)])))
-        (λ () (hasheq 'message (fake-assistant ""))))
-       (when after (after resp))))
+          (handle-chat-response resp (combine-output sp output))))
+       (close-response resp)))
    #:assistant-start fake))
 
-(define (chat/history/output message output
-                             #:assistant-start [fake #f])
-  (chat-with-history
-   message
-   #:before (and fake (λ (resp) (write-string fake output)))
-   (λ (content json)
-     (write-string content output)
-     (flush-output output))
-   #:after close-response
-   #:assistant-start fake))
-
-(define (chat/history message
-                      #:assistant-start [fake #f]
-                      #:json? [json? #f]
-                      #:close-response? [close-response? #t])
-  (define prompt (make-continuation-prompt-tag))
-  (call-with-continuation-prompt
-   (λ ()
-     (chat-with-history
-      message
-      #:before
-      (λ (resp)
-        (call-with-composable-continuation
-         (λ (cc)
-           (abort-current-continuation
-            prompt
-            (λ () (response/producer
-                   (response-port resp)
-                   (generator () (cc))))))))
-      (λ (content json)
-        (yield (if json? json content)))
-      #:after (and close-response? close-response)
-      #:assistant-start fake)
-     (yield eof))
-   prompt))
+(define (handle-generate-response resp output)
+  (for ([j resp])
+    (perf-trace j)
+    (match j
+      [(hash* ['done done] ['response content])
+       (write-string content output)
+       (flush-output output)]
+      [(hash* ['error err])
+       (error 'generate "~a" err)])))
 
 (define (generate prompt
                   #:images [images #f]
@@ -107,18 +82,8 @@
                          #:stream? stream?
                          #:raw? raw
                          #:context context))
-  (define result
-    (for/last ([j resp])
-      (perf-trace j)
-      (match j
-        [(hash* ['done done] ['response content])
-         (write-string content output)
-         (flush-output output)
-         j]
-        [(hash* ['error err])
-         (error 'generate "~a" err)])))
-  (close-response resp)
-  result)
+  (handle-generate-response resp output)
+  (close-response resp))
 
 (define (perf-trace j)
   (match j

@@ -36,14 +36,14 @@
      #:data data))
   port)
 
-(define (call/interrupt proc empty)
+(define (call/interrupt proc [on-abort #f])
   (with-handlers* ([(λ (e) (and (exn:break? e)
                                 (continuation-prompt-available? break-prompt-tag)))
                     (λ (e)
                       (call/cc
                        (λ (cc)
                          (abort-current-continuation break-prompt-tag cc)))
-                      (empty))])
+                      (when on-abort (on-abort)))])
     (proc)))
 
 (define (call/history message proc #:assistant-start [fake #f])
@@ -56,10 +56,10 @@
   (define sp (open-output-string))
   (when fake
     (write-string fake sp))
-  (define result (proc messages sp))
+  (proc messages sp)
   (current-history
    (append-history
     (current-history)
     message
-    (hash-set (hash-ref result 'message)
-              'content (get-output-string sp)))))
+    (hasheq 'role "assistant"
+            'content (get-output-string sp)))))

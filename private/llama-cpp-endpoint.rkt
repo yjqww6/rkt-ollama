@@ -39,52 +39,55 @@
     (send "/v1/chat/completions" data))
   (response/producer p (reciever p)))
 
+(define (handle-chat-response resp output)
+  (let/ec k
+    (for ([j resp])
+      (match j
+        [(hash* ['usage (hash* ['completion_tokens eval_count] ['prompt_tokens prompt_eval_count])])
+         (log-perf-trace (perf prompt_eval_count eval_count #f #f #f #f))]
+        [else (void)])
+      (match j
+        [(hash* ['choices (list (or (hash* ['delta (hash* ['content content])])
+                                    (hash* ['message (hash* ['content content])])) _ ...)])
+         (write-string content output)
+         (flush-output output)]
+        [(hash* ['choices '()]) (void)]
+        [(hash* ['choices (list (hash* ['finish_reason (? string?)]) _ ...)])
+         (k)]
+        [(hash* ['error _])
+         (error 'chat "~a" j)]))))
+
 (define (chat/history/output message output)
   (call/history
    message
    (λ (messages sp)
      (define resp (chat messages))
-     (let/ec k
-       (call/interrupt
-        (λ ()
-          (for ([j resp])
-            (match j
-              [(hash* ['usage (hash* ['completion_tokens eval_count] ['prompt_tokens prompt_eval_count])])
-               (log-perf-trace (perf prompt_eval_count eval_count #f #f #f #f))]
-              [else (void)])
-            (match j
-              [(hash* ['choices (list (or (hash* ['delta (hash* ['content content])])
-                                          (hash* ['message (hash* ['content content])])) _ ...)])
-               (write-string content sp)
-               (write-string content output)
-               (flush-output output)]
-              [(hash* ['choices '()]) (void)]
-              [(hash* ['choices (list (hash* ['finish_reason (? string?)]) _ ...)])
-               (k)]
-              [(hash* ['error _])
-               (error 'chat "~a" j)])))
-        void))
-     (hasheq 'message (hasheq 'role "assistant")))))
+     (call/interrupt
+      (λ ()
+        (handle-chat-response resp (combine-output sp output)))))))
+
+(define (handle-completion-response resp output)
+  (let/ec k
+    (for ([j resp])
+      (match j
+        [(hash* ['tokens_evaluated prompt-tokens] ['tokens_predicted eval-tokens]
+                ['timings (hash* ['prompt_ms prompt-duration] ['predicted_ms eval-duration]
+                                 ['prompt_per_second prompt-tokens-per-second]
+                                 ['predicted_per_second eval-tokens-per-seoncd])])
+         (log-perf-trace (perf prompt-tokens eval-tokens (/ prompt-duration 1e3) (/ eval-duration 1e3)
+                               prompt-tokens-per-second eval-tokens-per-seoncd))]
+        [else (void)])
+      (match j
+        [(hash* ['content content] ['stop stop])
+         (write-string content output)
+         (flush-output output)
+         (when stop (k))]))))
 
 (define (completion/output prompt output)
   (define data (hash-set (build-options) 'prompt prompt))
   (define p (send "/completion" data))
   (define resp (response/producer p (reciever p)))
-  (let/ec k
-    (for ([j resp])
-      (match j
-        [(hash* ['content content] ['stop stop])
-         (write-string content output)
-         (flush-output output)
-         (when stop
-           (match j
-             [(hash* ['tokens_evaluated prompt-tokens] ['tokens_predicted eval-tokens]
-                     ['timings (hash* ['prompt_ms prompt-duration] ['predicted_ms eval-duration]
-                                      ['prompt_per_second prompt-tokens-per-second]
-                                      ['predicted_per_second eval-tokens-per-seoncd])])
-              (log-perf-trace (perf prompt-tokens eval-tokens (/ prompt-duration 1e3) (/ eval-duration 1e3)
-                                    prompt-tokens-per-second eval-tokens-per-seoncd))])
-           (k))])))
+  (handle-completion-response resp output)
   (close-response resp))
 
 (define current-chat-template (make-parameter (λ (messages) (error 'empty-template))))
@@ -94,6 +97,6 @@
    message
    (λ (messages sp)
      (define prompt (template messages))
-     (completion/output prompt (combine-output sp output))
-     (hasheq 'message (hasheq 'role "assistant")))
+     (when fake (write-string fake output))
+     (completion/output prompt (combine-output sp output)))
    #:assistant-start fake))
