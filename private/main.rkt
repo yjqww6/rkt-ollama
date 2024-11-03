@@ -28,6 +28,7 @@
         (λ ()
           (for/last ([j resp]
                      #:final (hash-ref j 'done #f))
+            (perf-trace j)
             (match j
               [(hash* ['message (hash* ['content content])])
                (write-string content sp)
@@ -108,6 +109,7 @@
                          #:context context))
   (define result
     (for/last ([j resp])
+      (perf-trace j)
       (match j
         [(hash* ['done done] ['response content])
          (write-string content output)

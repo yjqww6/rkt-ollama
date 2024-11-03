@@ -12,9 +12,7 @@
          [(eof-object? l) l]
          [else
           (log-network-trace (network:recv l))
-          (define j (string->jsexpr l))
-          (perf-trace j)
-          j]))
+          (string->jsexpr l)]))
      (response-port resp))))
 
 (struct response/producer response (proc)
@@ -65,14 +63,3 @@
     message
     (hash-set (hash-ref result 'message)
               'content (get-output-string sp)))))
-
-(define (perf-trace j)
-  (match j
-    [(hash* ['total_duration total_duration]
-            ['load_duration load_duration]
-            ['prompt_eval_duration prompt_eval_duration]
-            ['eval_duration eval_duration]
-            ['prompt_eval_count prompt_eval_count]
-            ['eval_count eval_count])
-     (log-perf-trace (perf prompt_eval_count eval_count (/ prompt_eval_duration 1e9) (/ eval_duration 1e9) #f #f))]
-    [else (void)]))
