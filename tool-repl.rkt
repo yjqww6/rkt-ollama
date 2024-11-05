@@ -16,9 +16,17 @@
      ((current-execute) content)]
     [else (void)]))
 
+(define ((make-auto-execute-chat [chat (current-chat)]) s)
+  (chat s)
+  (match (current-history)
+    [(list _ ... (hash* ['role "assistant"] ['content content]))
+     ((current-execute) content)]
+    [else (void)]))
+
 (define (use-nous-tools #:tools [tools default-tools]
                         #:system [system (current-system)]
-                        #:history [history '()])
+                        #:history [history '()]
+                        #:auto? [auto #t])
   (define callback (tools-callback tools))
   (define (exec content)
     (define call (parse-nous-toolcall content))
@@ -29,5 +37,8 @@
                  [current-history history]
                  [current-execute exec]
                  [current-repl-prompt (λ () (string-append "TOOL:" (default-repl-prompt)))])
-    (repl)))
+    (if auto
+        (parameterize ([current-chat (make-auto-execute-chat)])
+          (repl))
+        (repl))))
   
