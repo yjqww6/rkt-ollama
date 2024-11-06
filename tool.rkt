@@ -67,7 +67,7 @@ TPL
 
 For each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:
 <tool_call>
-{{"name": <function-name>, "arguments": <args-json-object>}}
+{"name": <function-name>, "arguments": <args-json-object>}
 </tool_call>
 TPL
       )
@@ -82,16 +82,13 @@ TPL
         suffix)]))
 
   (define (parse-nous-toolcall response)
-    (define (parse pat)
-      (match (regexp-match* pat response #:match-select cadr)
-        [(list call ...)
-         (with-handlers ([exn:fail:read? (λ (e) #f)])
-           (match (map string->jsexpr call)
-             [(and c (list (hash* ['name _] ['arguments _]) ...)) c]
-             [else #f]))]
-        [a (displayln a) #f]))
-    (or (parse #px"<tool_call>\\s*\\{(.*?)\\}\\s*</tool_call>")
-        (parse #px"<tool_call>\\s*(.*?)\\s*</tool_call>")))
+    (match (regexp-match* #px"<tool_call>\\s*(.*?)\\s*</tool_call>" response #:match-select cadr)
+      [(list call ...)
+       (with-handlers ([exn:fail:read? (λ (e) #f)])
+         (match (map string->jsexpr call)
+           [(and c (list (hash* ['name _] ['arguments _]) ...)) c]
+           [else #f]))]
+      [else #f]))
 
   (define (make-nous-response response)
     (string-append "<tool_response>" (jsexpr->string response) "</tool_response>")))
