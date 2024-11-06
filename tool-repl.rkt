@@ -1,5 +1,5 @@
 #lang racket/base
-(require racket/date racket/match "tool.rkt" "repl.rkt"
+(require racket/date racket/string racket/match "tool.rkt" "repl.rkt"
          (submod "tool.rkt" template))
 (provide (all-from-out "tool.rkt") (all-defined-out))
 
@@ -29,9 +29,13 @@
                         #:auto? [auto #t])
   (define callback (tools-callback tools))
   (define (exec content)
-    (define call (parse-nous-toolcall content))
-    (when call
-      (define resp (make-nous-response (callback call)))
+    (define calls (parse-nous-toolcall content))
+    (when (and calls (not (null? calls)))
+      (define resp
+        (string-join
+         (for/list ([call (in-list calls)])
+           (make-nous-response (callback call)))
+         "\n"))
       ((current-chat) (make-user resp))))
   (parameterize ([current-system (make-nous-system-template tools system)]
                  [current-history history]
