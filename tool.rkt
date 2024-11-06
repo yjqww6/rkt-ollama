@@ -94,4 +94,4 @@ TPL
         (parse #px"<tool_call>\\s*(.*?)\\s*</tool_call>")))
 
   (define (make-nous-response response)
-    (string-append "<tool_response>" (jsexpr->string response) "/<tool_response>")))
+    (string-append "<tool_response>" (jsexpr->string response) "</tool_response>")))
