@@ -86,7 +86,9 @@ TPL
       (match (regexp-match pat response)
         [(cons _ (list call))
          (with-handlers ([exn:fail:read? (λ (e) #f)])
-           (string->jsexpr call))]
+           (match (string->jsexpr call)
+             [(and c (hash* ['name _] ['arguments _])) c]
+             [else #f]))]
         [else #f]))
     (or (parse #px"<tool_call>\\s*\\{(.*?)\\}\\s*</tool_call>")
         (parse #px"<tool_call>\\s*(.*?)\\s*</tool_call>")))
