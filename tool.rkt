@@ -83,13 +83,13 @@ TPL
 
   (define (parse-nous-toolcall response)
     (define (parse pat)
-      (match (regexp-match pat response)
-        [(cons _ (list call))
+      (match (regexp-match* pat response #:match-select cadr)
+        [(list call ...)
          (with-handlers ([exn:fail:read? (λ (e) #f)])
-           (match (string->jsexpr call)
-             [(and c (hash* ['name _] ['arguments _])) c]
+           (match (map string->jsexpr call)
+             [(and c (list (hash* ['name _] ['arguments _]) ...)) c]
              [else #f]))]
-        [else #f]))
+        [a (displayln a) #f]))
     (or (parse #px"<tool_call>\\s*\\{(.*?)\\}\\s*</tool_call>")
         (parse #px"<tool_call>\\s*(.*?)\\s*</tool_call>")))
 
