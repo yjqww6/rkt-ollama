@@ -84,10 +84,9 @@ TPL
   (define (parse-nous-toolcall response)
     (match (regexp-match* #px"<tool_call>\\s*(.*?)\\s*</tool_call>" response #:match-select cadr)
       [(list call ...)
-       (with-handlers ([exn:fail:read? (λ (e) #f)])
-         (match (map string->jsexpr call)
-           [(and c (list (hash* ['name _] ['arguments _]) ...)) c]
-           [else #f]))]
+       (match (map string->jsexpr call)
+         [(and c (list (hash* ['name _] ['arguments _]) ...)) c]
+         [else #f])]
       [else #f]))
 
   (define (make-nous-response response)
