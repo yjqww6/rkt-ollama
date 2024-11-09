@@ -1,6 +1,6 @@
 #lang racket/base
 (require racket/list racket/sequence racket/string)
-(provide chatml llama3 gemma2 minitron minitron/stop)
+(provide chatml llama3 gemma2 minitron minitron/stop mistral)
 ;;;; mostly for llama.cpp prefill
 
 (define (split-messages messages [merge-system? #t])
@@ -83,3 +83,14 @@
   (get-output-string s))
 
 (define minitron/stop '("<extra_id_1>"))
+
+(define (mistral messages)
+  (define s (open-output-string))
+  (define-values (sys msgs prefill) (split-messages messages #f))
+  (define new-msgs (inject-system-to-first-user msgs sys (λ (s u) (format "<<SYS>>\n~a\n<</SYS>>\n\n~a" s u))))
+  (for ([(role content) (in-messages new-msgs)])
+    (cond
+      [(string=? role "assistant") (fprintf s "~a</s>" content)]
+      [else (fprintf s "[INST] ~a [/INST]" content)]))
+  (fprintf s "~a" (prefill-content prefill))
+  (get-output-string s))
