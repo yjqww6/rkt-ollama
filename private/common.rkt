@@ -1,5 +1,5 @@
 #lang racket/base
-(require racket/match json net/http-client "config.rkt" "log.rkt" "history.rkt")
+(require racket/port racket/match json net/http-client "config.rkt" "log.rkt" "history.rkt")
 (provide (all-defined-out))
 
 (struct response (port)
@@ -54,8 +54,6 @@
      message
      (fake-assistant fake)))
   (define sp (open-output-string))
-  (when fake
-    (write-string fake sp))
   (proc messages sp)
   (current-history
    (append-history
@@ -63,3 +61,35 @@
     message
     (hasheq 'role "assistant"
             'content (get-output-string sp)))))
+
+(define current-chat-endpoint
+  (make-parameter (λ (messages output [fake #f]) (error 'chat "no endpoint"))))
+
+(define current-completion-endpoint
+  (make-parameter (λ (prompt output) (error 'completion "no endpoint"))))
+
+(define current-chat-template (make-parameter (λ (messages) (error 'empty-template))))
+
+(define (chat/history/output message output
+                             #:assistant-start [fake #f])
+  (call/history
+   message
+   (λ (messages sp)
+     (call/interrupt
+      (λ ()
+        ((current-chat-endpoint) messages (combine-output sp output) fake))))
+   #:assistant-start fake))
+
+(define (completion/history/output message output
+                                   #:assistant-start [fake #f] #:template [template (current-chat-template)])
+  (call/history
+   message
+   (λ (messages sp)
+     (define prompt (template messages))
+     (define new-output (combine-output sp output))
+     (when fake (write-string fake new-output))
+     ((current-completion-endpoint) prompt new-output))
+   #:assistant-start fake))
+
+(define (completion/output prompt output)
+  ((current-completion-endpoint) prompt output))

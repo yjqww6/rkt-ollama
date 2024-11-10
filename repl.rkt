@@ -146,8 +146,7 @@
            racket/port racket/cmdline racket/runtime-path
            (for-syntax racket/base))
   (define-runtime-module-path-index repl '(submod ".."))
-  (define-runtime-module-path-index ollama '(submod "main.rkt" ollama))
-  (define-runtime-module-path-index llama-cpp '(submod "main.rkt" llama-cpp))
+  (define-runtime-module-path-index llama-cpp "private/llama-cpp-endpoint.rkt")
   (define-runtime-module-path-index llama-cpp-template "private/chat-template.rkt")
 
   (define ns (namespace-anchor->empty-namespace here))
@@ -170,19 +169,19 @@
                     (namespace-require llama-cpp ns)
                     (default-endpoint (cons "localhost" 8080))
                     (case tpl
-                      [("oai" "openai") (current-chat (make-default-chat (dynamic-require llama-cpp 'chat)))]
+                      [("oai" "openai") (current-chat (make-default-chat chat))]
                       [else
-                       ((dynamic-require llama-cpp 'current-chat-template)
-                        (dynamic-require llama-cpp-template (string->symbol tpl)))
+                       (current-chat-template (dynamic-require llama-cpp-template (string->symbol tpl)))
                        (current-stop (dynamic-require llama-cpp-template (string->symbol (string-append tpl "/stop")) (λ () #f)))
-                       (current-chat (make-default-chat (dynamic-require llama-cpp 'chat-by-completion)))])]
+                       (current-chat (make-default-chat chat-by-completion))])
+                    (use-llama-cpp)]
    #:multi
    [("-r" "--require") file "required file" (namespace-require file ns)]
    [("-e" "--expr") expr "expression" (eval (read (open-input-string expr)) ns)])
 
   (unless (current-chat)
-    (namespace-require ollama ns)
-    (current-chat (make-default-chat (dynamic-require ollama 'chat))))
+    (use-ollama)
+    (current-chat (make-default-chat chat)))
 
   (cond
     [(default-system) => current-system])

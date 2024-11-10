@@ -1,8 +1,7 @@
 #lang racket/base
 (require "config.rkt" "history.rkt" "log.rkt" "common.rkt"
          racket/match racket/port json)
-(provide  generate chat
-          chat/history/output generate/output
+(provide  generate ollama-chat-endpoint ollama-completion-endpoint
           embeddings list-models)
 
 (define (chat messages)
@@ -27,19 +26,11 @@
       [(hash* ['error err])
        (error 'chat/history "~a" err)])))
 
-(define (chat/history/output message output
-                             #:assistant-start [fake #f])
-  (call/history
-   message
-   (λ (messages sp)
-     (define resp (chat messages))
-     (when fake (write-string fake output))
-     (begin0
-       (call/interrupt
-        (λ ()
-          (handle-chat-response resp (combine-output sp output))))
-       (close-response resp)))
-   #:assistant-start fake))
+(define (ollama-chat-endpoint messages output [fake #f])
+  (define resp (chat messages))
+  (when fake (write-string fake output))
+  (handle-chat-response resp output)
+  (close-response resp))
 
 (define (handle-generate-response resp output)
   (for ([j resp])
@@ -54,7 +45,6 @@
 (define (generate prompt
                   #:images [images #f]
                   #:template [template #f]
-                  #:stream? [stream? #t]
                   #:raw? [raw #f]
                   #:context [context #f])
   (define data
@@ -70,18 +60,8 @@
                 'format (current-response-format)))
   (response (send "/api/generate" data)))
 
-(define (generate/output prompt output
-                         #:images [images #f]
-                         #:template [template #f]
-                         #:stream? [stream? #t]
-                         #:raw? [raw #f]
-                         #:context [context #f])
-  (define resp (generate prompt
-                         #:images images
-                         #:template template
-                         #:stream? stream?
-                         #:raw? raw
-                         #:context context))
+(define (ollama-completion-endpoint prompt output)
+  (define resp (generate prompt #:raw? #t))
   (handle-generate-response resp output)
   (close-response resp))
 

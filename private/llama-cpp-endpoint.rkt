@@ -1,8 +1,8 @@
 #lang racket/base
 (require "config.rkt" "common.rkt" "log.rkt" "history.rkt")
-(require racket/string racket/match racket/port json)
-(provide chat/history/output completion/output current-options current-grammar
-         current-chat-template completion/history/output)
+(require racket/string racket/match json)
+(provide current-options current-grammar
+         llama-cpp-chat-endpoint llama-cpp-completion-endpoint)
 (define current-options (make-parameter (hasheq 'cache_prompt #t)))
 (define current-grammar (make-option 'grammar current-options))
 
@@ -57,14 +57,21 @@
         [(hash* ['error _])
          (error 'chat "~a" j)]))))
 
-(define (chat/history/output message output)
-  (call/history
-   message
-   (λ (messages sp)
+(define (call/prefill-workaround messages proc)
+  (match messages
+    [(list m ... (hash 'role "assistant" 'content fake))
+     (parameterize ([current-grammar (format "root ::= ~v .*" fake)])
+       (proc m))]
+    [else
+     (proc messages)]))
+
+(define (llama-cpp-chat-endpoint messages output [fake #f])
+  (call/prefill-workaround
+   messages
+   (λ (messages)
      (define resp (chat messages))
-     (call/interrupt
-      (λ ()
-        (handle-chat-response resp (combine-output sp output)))))))
+     (handle-chat-response resp output)
+     (close-response resp))))
 
 (define (handle-completion-response resp output)
   (let/ec k
@@ -83,20 +90,12 @@
          (flush-output output)
          (when stop (k))]))))
 
-(define (completion/output prompt output)
+(define (completion prompt)
   (define data (hash-set (build-options) 'prompt prompt))
   (define p (send "/completion" data))
-  (define resp (response/producer p (reciever p)))
+  (response/producer p (reciever p)))
+
+(define (llama-cpp-completion-endpoint prompt output)
+  (define resp (completion prompt))
   (handle-completion-response resp output)
   (close-response resp))
-
-(define current-chat-template (make-parameter (λ (messages) (error 'empty-template))))
-
-(define (completion/history/output message output #:assistant-start [fake #f] #:template [template (current-chat-template)])
-  (call/history
-   message
-   (λ (messages sp)
-     (define prompt (template messages))
-     (when fake (write-string fake output))
-     (completion/output prompt (combine-output sp output)))
-   #:assistant-start fake))

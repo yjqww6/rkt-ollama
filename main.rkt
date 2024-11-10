@@ -1,10 +1,12 @@
 #lang racket/base
 (require "private/config.rkt" "private/history.rkt" "private/image.rkt" "private/log.rkt"
+         "private/common.rkt"
          syntax/parse/define
          racket/string racket/match)
 (provide (all-from-out "private/config.rkt" "private/history.rkt" "private/log.rkt")
-         current-chat-output-port current-assistant-start
-         with-cust)
+         current-chat-output-port current-assistant-start with-cust
+         chat completion chat-by-completion
+         use-ollama use-llama-cpp current-chat-template)
 
 (define (call-with-cust thunk)
   (let ([cust (make-custodian)])
@@ -46,54 +48,21 @@
 
 (define current-assistant-start (make-parameter #f))
 
-(module+ ollama
-  (require "private/main.rkt")
-  (provide chat completion)
-  (define (chat #:output [output (current-chat-output-port)]
-                #:start [fake (current-assistant-start)]
-                . items)
-    (with-cust _
-      (chat/history/output (build-message "user" items) output #:assistant-start fake)
-      (void)))
+(define (chat #:output [output (current-chat-output-port)]
+              #:start [fake (current-assistant-start)]
+              . items)
+  (with-cust _
+    (chat/history/output (build-message "user" items) output #:assistant-start fake)
+    (void)))
 
-  (define (completion #:output [output (current-chat-output-port)]
+(define (completion #:output [output (current-chat-output-port)]
                     . items)
-    (define-values (prompt images) (collect items))
-    (with-cust _
-      (generate/output prompt output #:images images #:raw? #t)
-      (void))))
+  (define-values (prompt images) (collect items))
+  (with-cust _
+    (completion/output prompt output)
+    (void)))
 
-(module+ llama-cpp
-  (require "private/llama-cpp-endpoint.rkt")
-  (provide chat completion chat-by-completion (all-from-out "private/llama-cpp-endpoint.rkt"))
-  
-  (define (call/prefill-workaround fake f)
-    (cond
-      [(not fake) (f)]
-      [else
-       (parameterize ([current-grammar (format "root ::= ~v .*" fake)])
-         (f))]))
-  
-  (define (chat #:output [output (current-chat-output-port)]
-                #:start [fake (current-assistant-start)]
-                . items)
-    (define (f)
-      (with-cust _
-        (chat/history/output (build-message "user" items) output)
-        (void)))
-    (call/prefill-workaround fake f))
-  
-  (define (completion #:output [output (current-chat-output-port)]
-                      #:start [fake (current-assistant-start)]
-                      . items)
-    (define (f)
-      (define-values (prompt images) (collect items))
-      (with-cust _
-        (completion/output prompt output)
-        (void)))
-    (call/prefill-workaround fake f))
-
-  (define (chat-by-completion
+(define (chat-by-completion
            #:output [output (current-chat-output-port)]
            #:start [fake (current-assistant-start)]
            . items)
@@ -101,4 +70,14 @@
       (completion/history/output (build-message "user" items)
                                  output
                                  #:assistant-start fake)
-      (void))))
+      (void)))
+
+(define (use-ollama)
+  (local-require "private/main.rkt")
+  (current-chat-endpoint ollama-chat-endpoint)
+  (current-completion-endpoint ollama-completion-endpoint))
+
+(define (use-llama-cpp)
+  (local-require "private/llama-cpp-endpoint.rkt")
+  (current-chat-endpoint llama-cpp-chat-endpoint)
+  (current-completion-endpoint llama-cpp-completion-endpoint))
