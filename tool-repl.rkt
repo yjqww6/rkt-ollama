@@ -45,4 +45,35 @@
         (parameterize ([current-chat (make-auto-execute-chat)])
           (repl))
         (repl))))
-  
+
+;; need chat-by-completion & llama.cpp
+(define (use-nous-tools/constrained
+         #:tools [tools default-tools]
+         #:system [system (current-system)]
+         #:history [history '()]
+         #:auto? [auto #t])
+  (local-require "private/common.rkt" racket/port racket/string json)
+  (define has-tool (make-parameter #f))
+  (define old-trace (current-resp-trace))
+  (define (new-trace net)
+    (match net
+      [(hash* ['stopping_word "<tool_call>"])
+       (has-tool #t)]
+      [else (void)])
+    (old-trace net))
+
+  (define old-completion (current-completion-endpoint))
+  (define (new-completion prompt output)
+    (define p (open-output-string))
+    (parameterize ([has-tool #f])
+      (parameterize ([current-stop '("<tool_call>")]
+                     [current-resp-trace new-trace])
+        (old-completion prompt (combine-output output p)))
+      (when (has-tool)
+        (define new-prompt (string-append prompt (get-output-string p) "<tool_call> "))
+        (parameterize ([current-json-schema (hasheq)])
+          (write-string "<tool_call> " output)
+          (old-completion new-prompt output)
+          (write-string " </tool_call>" output)))))
+  (parameterize ([current-completion-endpoint new-completion])
+    (use-nous-tools #:tools tools #:system system #:history history #:auto? auto)))

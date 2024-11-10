@@ -63,3 +63,6 @@
   [current-seed seed]
   [current-num-predict num_predict]
   [current-stop stop])
+
+(define current-grammar (make-parameter #f))
+(define current-json-schema (make-parameter #f))

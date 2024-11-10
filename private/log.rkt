@@ -31,9 +31,13 @@
 
 (define current-network-trace (make-parameter void))
 (define current-perf-trace (make-parameter default-perf-trace))
+(define current-resp-trace (make-parameter void))
 
 (define (log-network-trace data)
   ((current-network-trace) data))
 
 (define (log-perf-trace data)
   ((current-perf-trace) data))
+
+(define (log-resp-trace data)
+  ((current-resp-trace) data))

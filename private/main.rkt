@@ -18,6 +18,7 @@
 (define (handle-chat-response resp output)
   (for ([j resp]
         #:final (hash-ref j 'done #f))
+    (log-resp-trace j)
     (perf-trace j)
     (match j
       [(hash* ['message (hash* ['content content])])
@@ -34,6 +35,7 @@
 
 (define (handle-generate-response resp output)
   (for ([j resp])
+    (log-resp-trace j)
     (perf-trace j)
     (match j
       [(hash* ['done done] ['response content])

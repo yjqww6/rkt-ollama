@@ -4,7 +4,6 @@
 (provide current-options current-grammar
          llama-cpp-chat-endpoint llama-cpp-completion-endpoint)
 (define current-options (make-parameter (hasheq 'cache_prompt #t)))
-(define current-grammar (make-option 'grammar current-options))
 
 (define (build-options)
   (hash-param
@@ -18,6 +17,8 @@
    'repeat_last_n (current-repeat-last-n)
    'max_tokens (current-num-predict)
    'stop (current-stop)
+   'grammar (current-grammar)
+   'json_schema (current-json-schema)
    (current-options)))
 
 (define ((reciever port))
@@ -42,6 +43,7 @@
 (define (handle-chat-response resp output)
   (let/ec k
     (for ([j resp])
+      (log-resp-trace j)
       (match j
         [(hash* ['usage (hash* ['completion_tokens eval_count] ['prompt_tokens prompt_eval_count])])
          (log-perf-trace (perf prompt_eval_count eval_count #f #f #f #f))]
@@ -76,6 +78,7 @@
 (define (handle-completion-response resp output)
   (let/ec k
     (for ([j resp])
+      (log-resp-trace j)
       (match j
         [(hash* ['tokens_evaluated prompt-tokens] ['tokens_predicted eval-tokens]
                 ['timings (hash* ['prompt_ms prompt-duration] ['predicted_ms eval-duration]
