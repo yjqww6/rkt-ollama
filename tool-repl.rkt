@@ -1,5 +1,6 @@
 #lang racket/base
-(require racket/date racket/string racket/match "tool.rkt" "repl.rkt"
+(require racket/date racket/string racket/match json
+         "tool.rkt" "repl.rkt" "private/chat-template.rkt" "main.rkt"
          (submod "tool.rkt" template))
 (provide (all-from-out "tool.rkt") (all-defined-out))
 
@@ -77,3 +78,28 @@
           (write-string " </tool_call>" output)))))
   (parameterize ([current-completion-endpoint new-completion])
     (use-nous-tools #:tools tools #:system system #:history history #:auto? auto)))
+
+;;; chat-by-completion is needed
+(define (use-mistral-tools #:tools [tools default-tools]
+                           #:system [system (current-system)]
+                           #:history [history '()]
+                           #:auto? [auto #t])
+  (define callback (tools-callback tools))
+  (define (exec content)
+    (define calls (parse-mistral-toolcall content))
+    (when (and calls (not (null? calls)))
+      (define resp
+        (string-join
+         (for/list ([call (in-list calls)])
+           (make-mistral-response (callback call)))
+         "\n"))
+      ((current-chat) (hasheq 'role "tool" 'content resp))))
+  (define tools-string (tools->string tools))
+  (parameterize ([current-history history]
+                 [current-execute exec]
+                 [current-repl-prompt (λ () (string-append "TOOL:" (default-repl-prompt)))]
+                 [current-chat-template (λ (messages) (mistral messages #:tools tools-string))])
+    (if auto
+        (parameterize ([current-chat (make-auto-execute-chat)])
+          (repl))
+        (repl))))

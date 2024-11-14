@@ -84,13 +84,16 @@
 
 (define minitron/stop '("<extra_id_1>"))
 
-(define (mistral messages)
+(define (mistral messages #:tools [tools #f])
   (define s (open-output-string))
   (define-values (sys msgs prefill) (split-messages messages #f))
-  (define new-msgs (inject-system-to-first-user msgs sys (λ (s u) (format "<<SYS>>\n~a\n<</SYS>>\n\n~a" s u))))
+  (define new-msgs (inject-system-to-first-user msgs sys))
+  (when tools
+    (fprintf s "[AVAILABLE_TOOLS] ~a[/AVAILABLE_TOOLS]" tools))
   (for ([(role content) (in-messages new-msgs)])
     (cond
       [(string=? role "assistant") (fprintf s "~a</s>" content)]
-      [else (fprintf s "[INST] ~a [/INST]" content)]))
+      [(string=? role "tool") (fprintf s "~a" content)]
+      [else (fprintf s "[INST] ~a[/INST]" content)]))
   (fprintf s "~a" (prefill-content prefill))
   (get-output-string s))

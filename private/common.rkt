@@ -68,8 +68,6 @@
 (define current-completion-endpoint
   (make-parameter (λ (prompt output) (error 'completion "no endpoint"))))
 
-(define current-chat-template (make-parameter (λ (messages) (error 'empty-template))))
-
 (define (chat/history/output message output
                              #:assistant-start [fake #f])
   (call/history

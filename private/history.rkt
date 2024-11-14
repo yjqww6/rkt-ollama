@@ -53,3 +53,6 @@
 
 (define (clear)
   (current-history '()))
+
+;;; for raw completion
+(define current-chat-template (make-parameter (λ (messages) (error 'empty-template))))
