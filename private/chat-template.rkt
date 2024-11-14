@@ -27,6 +27,10 @@
              (string-trim (hash-ref msg 'content) #:left? #f)))
    msgs))
 
+(define (last-user msgs)
+  (findf (λ (msg) (string=? (hash-ref msg 'role) "user"))
+         (reverse msgs)))
+
 (define (prefill-content msg)
   (if msg (hash-ref msg 'content) ""))
 
@@ -88,9 +92,12 @@
   (define s (open-output-string))
   (define-values (sys msgs prefill) (split-messages messages #f))
   (define new-msgs (inject-system-to-first-user msgs sys))
-  (when tools
-    (fprintf s "[AVAILABLE_TOOLS] ~a[/AVAILABLE_TOOLS]" tools))
-  (for ([(role content) (in-messages new-msgs)])
+  (define last-u (last-user new-msgs))
+  (for ([(role content) (in-messages new-msgs)]
+        [msg new-msgs])
+    (when (eq? last-u msg)
+      (when tools
+        (fprintf s "[AVAILABLE_TOOLS] ~a[/AVAILABLE_TOOLS]" tools)))
     (cond
       [(string=? role "assistant") (fprintf s "~a</s>" content)]
       [(string=? role "tool") (fprintf s "~a" content)]
