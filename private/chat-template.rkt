@@ -27,10 +27,6 @@
              (string-trim (hash-ref msg 'content) #:left? #f)))
    msgs))
 
-(define (last-user msgs)
-  (findf (λ (msg) (string=? (hash-ref msg 'role) "user"))
-         (reverse msgs)))
-
 (define (prefill-content msg)
   (if msg (hash-ref msg 'content) ""))
 
@@ -88,19 +84,23 @@
 
 (define minitron/stop '("<extra_id_1>"))
 
+(define (last-msg msgs)
+  (if (null? msgs) #f (last msgs)))
+
 (define (mistral messages #:tools [tools #f])
   (define s (open-output-string))
   (define-values (sys msgs prefill) (split-messages messages #f))
   (define new-msgs (inject-system-to-first-user msgs sys))
-  (define last-u (last-user new-msgs))
+  (define last (last-msg new-msgs))
   (for ([(role content) (in-messages new-msgs)]
-        [msg new-msgs])
-    (when (eq? last-u msg)
-      (when tools
-        (fprintf s "[AVAILABLE_TOOLS] ~a[/AVAILABLE_TOOLS]" tools)))
+        [msg (in-list new-msgs)])
     (cond
       [(string=? role "assistant") (fprintf s "~a</s>" content)]
       [(string=? role "tool") (fprintf s "~a" content)]
-      [else (fprintf s "[INST] ~a[/INST]" content)]))
+      [else
+       (when (eq? last msg)
+         (when tools
+           (fprintf s "[AVAILABLE_TOOLS] ~a[/AVAILABLE_TOOLS]" tools)))
+       (fprintf s "[INST] ~a[/INST]" content)]))
   (fprintf s "~a" (prefill-content prefill))
   (get-output-string s))

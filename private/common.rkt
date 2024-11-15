@@ -86,7 +86,9 @@
      (define prompt (template messages))
      (define new-output (combine-output sp output))
      (when fake (write-string fake new-output))
-     ((current-completion-endpoint) prompt new-output))
+     (call/interrupt
+      (λ ()
+        ((current-completion-endpoint) prompt new-output))))
    #:assistant-start fake))
 
 (define (completion/output prompt output)

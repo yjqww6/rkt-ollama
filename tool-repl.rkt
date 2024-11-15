@@ -97,6 +97,7 @@
   (define tools-string (tools->string tools))
   (parameterize ([current-history history]
                  [current-execute exec]
+                 [current-temperature 0.2]
                  [current-repl-prompt (λ () (string-append "TOOL:" (default-repl-prompt)))]
                  [current-chat-template (λ (messages) (mistral messages #:tools tools-string))])
     (if auto
