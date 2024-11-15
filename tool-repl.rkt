@@ -104,3 +104,22 @@
         (parameterize ([current-chat (make-auto-execute-chat)])
           (repl))
         (repl))))
+
+(define (use-nemotron-tools #:tools [tools default-tools]
+                            #:system [system (current-system)]
+                            #:history [history '()]
+                            #:auto? [auto #t])
+  (define callback (tools-callback tools))
+  (define (exec content)
+    (define call (parse-nemotron-toolcall content))
+    (define resp (make-nemotron-response (callback call)))
+    (when resp
+      ((current-chat) (hasheq 'role "ipython" 'content resp))))
+  (parameterize ([current-system (make-nemotron-system-template tools system)]
+                 [current-history history]
+                 [current-execute exec]
+                 [current-repl-prompt (λ () (string-append "TOOL:" (default-repl-prompt)))])
+    (if auto
+        (parameterize ([current-chat (make-auto-execute-chat)])
+          (repl))
+        (repl))))
