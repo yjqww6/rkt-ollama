@@ -118,25 +118,4 @@ TPL
 
   (define (make-mistral-response response)
     (format "[TOOL_RESULTS] ~a[/TOOL_RESULTS]" (jsexpr->string (hasheq 'content response))))
-
-  (define (make-nemotron-system-template tools system)
-    (cond
-      [(null? tools) system]
-      [else
-       (string-append #<<TPL
-Environment: ipython
-You have access to the following functions. To call a function, please respond with JSON for a function call. Respond in the format {"name": function name, "parameters": dictionary of argument name and its value}. Do not use variables.
-
-
-TPL
-                      (string-join (map tool->string tools) "\n\n" #:after-last "\n\n")
-                      (if system system ""))]))
-  (define (parse-nemotron-toolcall response)
-    (with-handlers ([exn:fail:read? (λ (e) #f)])
-        (match (string->jsexpr response)
-          [(hash* ['name name] ['parameters arguments])
-           (hasheq 'name name 'arguments arguments)]
-          [else #f])))
-  (define (make-nemotron-response response)
-    (jsexpr->string response))
   )
