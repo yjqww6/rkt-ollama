@@ -8,13 +8,24 @@
 (define-tool (get_current_time) #:desc "get the current time"
   (date->string (current-date) #t))
 
+(define-tool (nop) #:desc "do nothing"
+  #t)
+
 (define default-tools (list get_current_time))
 (define current-execute (make-parameter #f))
+(define (tool-repl-prompt)
+  (string-append "TOOL:" (default-repl-prompt)))
 
 (define (execute)
   (match (current-history)
     [(list _ ... (hash* ['role "assistant"] ['content content]))
      ((current-execute) content)]
+    [else (void)]))
+
+(define (call/last-response proc)
+  (match (current-history)
+    [(list _ ... (hash* ['role "assistant"] ['content content]))
+     (proc content)]
     [else (void)]))
 
 (define ((make-auto-execute-chat [chat (current-chat)]) s)
@@ -47,7 +58,7 @@
   (parameterize ([current-messages-preprocessor (make-system-preprocessor (λ (sys) (make-nous-system-template tools sys)))]
                  [current-history history]
                  [current-execute exec]
-                 [current-repl-prompt (λ () (string-append "TOOL:" (default-repl-prompt)))])
+                 [current-repl-prompt tool-repl-prompt])
     (if auto
         (parameterize ([current-chat (make-auto-execute-chat)])
           (repl))
@@ -89,7 +100,8 @@
 (define (use-mistral-tools #:tools [tools default-tools]
                            #:system [system (current-system)]
                            #:history [history '()]
-                           #:auto? [auto #t])
+                           #:auto? [auto #t]
+                           #:always? [always? #f])
   (define callback (tools-callback tools))
   (define (exec content)
     (define calls (parse-mistral-toolcall content))
@@ -104,12 +116,34 @@
   (parameterize ([current-history history]
                  [current-execute exec]
                  [current-temperature 0.2]
-                 [current-repl-prompt (λ () (string-append "TOOL:" (default-repl-prompt)))]
-                 [current-chat-template (λ (messages) (mistral messages #:tools tools-string))])
-    (if auto
-        (parameterize ([current-chat (make-auto-execute-chat)])
-          (repl))
-        (repl))))
+                 [current-repl-prompt tool-repl-prompt])
+    (cond
+      [always?
+       (define old-chat (current-chat))
+       (define (always-chat s)
+         (match s
+           [(hash* ['role "tool"]) (old-chat s)]
+           [else
+            (parameterize ([current-chat-template (λ (messages) (mistral messages #:tools tools-string))]
+                           [current-output-prefix " ["]
+                           ; TODO grammar
+                           )
+              (old-chat s))
+            (call/last-response
+             (λ (content)
+               (match (parse-mistral-toolcall content)
+                 [(list (hash* ['name "nop"]))
+                  (undo)
+                  (old-chat s)]
+                 [else (void)])))]))
+       (parameterize ([current-chat always-chat])
+         (repl))]
+      [else
+       (parameterize ([current-chat-template (λ (messages) (mistral messages #:tools tools-string))])
+         (if auto
+             (parameterize ([current-chat (make-auto-execute-chat)])
+               (repl))
+             (repl)))])))
 
 (define (use-nemotron-tools #:tools [tools default-tools]
                             #:system [system (current-system)]
@@ -124,7 +158,7 @@
   (parameterize ([current-messages-preprocessor (make-system-preprocessor (λ (sys) (make-nemotron-system-template tools sys)))]
                  [current-history history]
                  [current-execute exec]
-                 [current-repl-prompt (λ () (string-append "TOOL:" (default-repl-prompt)))])
+                 [current-repl-prompt tool-repl-prompt])
     (if auto
         (parameterize ([current-chat (make-auto-execute-chat)])
           (repl))
