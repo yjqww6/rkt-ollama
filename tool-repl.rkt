@@ -1,6 +1,6 @@
 #lang racket/base
 (require racket/date racket/string racket/match json
-         "tool.rkt" "repl.rkt" "private/chat-template.rkt" "main.rkt"
+         "tool.rkt" "repl.rkt" "private/chat-template.rkt" "private/history.rkt" "main.rkt"
          (submod "tool.rkt" template))
 (provide (all-from-out "tool.rkt") (all-defined-out))
 
@@ -24,6 +24,12 @@
      ((current-execute) content)]
     [else (void)]))
 
+(define ((make-system-preprocessor f) messages)
+  (match messages
+    [(cons (hash 'role "system" 'content content) m)
+     (cons (hasheq 'role "system" 'content (f content)) m)]
+    [else (cons (hasheq 'role "system" 'content (f #f)) messages)]))
+
 (define (use-nous-tools #:tools [tools default-tools]
                         #:system [system (current-system)]
                         #:history [history '()]
@@ -38,7 +44,7 @@
            (make-nous-response (callback call)))
          "\n"))
       ((current-chat) (make-user resp))))
-  (parameterize ([current-system (make-nous-system-template tools system)]
+  (parameterize ([current-messages-preprocessor (make-system-preprocessor (λ (sys) (make-nous-system-template tools sys)))]
                  [current-history history]
                  [current-execute exec]
                  [current-repl-prompt (λ () (string-append "TOOL:" (default-repl-prompt)))])
@@ -115,7 +121,7 @@
     (define resp (make-nemotron-response (callback call)))
     (when resp
       ((current-chat) (hasheq 'role "ipython" 'content resp))))
-  (parameterize ([current-system (make-nemotron-system-template tools system)]
+  (parameterize ([current-messages-preprocessor (make-system-preprocessor (λ (sys) (make-nemotron-system-template tools sys)))]
                  [current-history history]
                  [current-execute exec]
                  [current-repl-prompt (λ () (string-append "TOOL:" (default-repl-prompt)))])

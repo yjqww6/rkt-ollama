@@ -48,11 +48,12 @@
 
 (define (call/history message proc #:assistant-start [fake #f])
   (define messages
-    (append-history
-     (make-system (current-system))
-     (current-history)
-     message
-     (fake-assistant fake)))
+    ((current-messages-preprocessor)
+     (append-history
+      (make-system (current-system))
+      (current-history)
+      message
+      (fake-assistant fake))))
   (define sp (open-output-string))
   (proc messages sp)
   (current-history

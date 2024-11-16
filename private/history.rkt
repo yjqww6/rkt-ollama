@@ -56,3 +56,4 @@
 
 ;;; for raw completion
 (define current-chat-template (make-parameter (λ (messages) (error 'empty-template))))
+(define current-messages-preprocessor (make-parameter values))
