@@ -43,7 +43,7 @@
       [(cons (hash* ['role "user"]) r) (current-history (reverse r))]
       [(cons m r) (loop r)])))
 
-(define (shift)
+(define (history-pop)
   (current-history
    (let loop ([h (current-history)])
      (match h
