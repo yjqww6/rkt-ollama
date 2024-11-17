@@ -118,4 +118,33 @@ TPL
 
   (define (make-mistral-response response)
     (format "[TOOL_RESULTS] ~a[/TOOL_RESULTS]" (jsexpr->string (hasheq 'content response))))
+
+  (define (make-llama3-system-template system)
+    (string-append
+     (if system system "")
+     (if system "\n\n" "")
+     #<<TPL
+Cutting Knowledge Date: December 2023
+
+When you receive a tool call response, use the output to format an answer to the orginal user question.
+
+You are a helpful assistant with tool calling capabilities.
+TPL
+     ))
+  (define (make-llama3-prompt tools user)
+    (format
+     "~a\n~a\nQuestion: ~a"
+     #<<TPL
+Given the following functions, please respond with a JSON for a function call with its proper arguments that best answers the given prompt.
+
+Respond in the format {"name": function name, "parameters": dictionary of argument name and its value}. Do not use variables.
+TPL
+     (string-join (map tool->string tools) "\n")
+     user))
+  (define (parse-llama3-toolcall response)
+    (with-handlers ([exn:fail:read? (λ (e) #f)])
+      (match (string->jsexpr response)
+        [(hash 'name name 'parameters arguments)
+         (hasheq 'name name 'arguments arguments)]
+        [else #f])))
   )

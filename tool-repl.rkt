@@ -1,5 +1,5 @@
 #lang racket/base
-(require racket/date racket/string racket/match racket/control
+(require racket/date racket/string racket/match racket/control json
          "tool.rkt" "repl.rkt" "private/chat-template.rkt" "private/history.rkt" "main.rkt"
          (submod "tool.rkt" template))
 (provide (all-from-out "tool.rkt") (all-defined-out))
@@ -8,7 +8,7 @@
 (define-tool (get_current_time) #:desc "get the current time"
   (date->string (current-date) #t))
 
-(define-tool (nop) #:desc "do nothing"
+(define-tool (nop) #:desc "do nothing. call this tool if you don't need to call other tools"
   #t)
 
 (define default-tools (list get_current_time))
@@ -35,11 +35,21 @@
      ((current-execute) content)]
     [else (void)]))
 
-(define ((make-system-preprocessor f) messages)
-  (match messages
-    [(cons (hash 'role "system" 'content content) m)
-     (cons (hasheq 'role "system" 'content (f content)) m)]
-    [else (cons (hasheq 'role "system" 'content (f #f)) messages)]))
+(define ((make-system-preprocessor f [next (current-messages-preprocessor)]) messages)
+  (next
+   (match messages
+     [(cons (hash 'role "system" 'content content) m)
+      (cons (hasheq 'role "system" 'content (f content)) m)]
+     [else (cons (hasheq 'role "system" 'content (f #f)) messages)])))
+
+(define ((make-last-user-preprocessor f [next (current-messages-preprocessor)]) messages)
+  (next
+   (match messages
+     [(list m ... (hash 'role "user" 'content content))
+      (append m (list (hasheq 'role "user" 'content (f content))))]
+     [(list m ... (hash 'role "user" 'content content) (and pre (hash* ['role "assistant"])))
+      (append m (list (hasheq 'role "user" 'content (f content)) pre))]
+     [else messages])))
 
 (define (use-nous-tools #:tools [tools default-tools]
                         #:auto? [auto? #f]
@@ -129,6 +139,49 @@
                     (old-chat s)]
                    [else (void)]))))]))
        (shift k (parameterize ([current-chat always-chat]) (k))))
+     (when auto?
+       (shift k (parameterize ([current-chat (make-auto-execute-chat)]) (k))))
+     (repl))))
+
+(define (use-llama3-tools #:tools [tools default-tools]
+                          #:auto? [auto? #f]
+                          #:always? [always? #t])
+  (define callback (tools-callback tools))
+  (define (exec content)
+    (define call (parse-llama3-toolcall content))
+    (when call
+      (define resp
+        (jsexpr->string (callback call)))
+      ((current-chat) (hasheq 'role "ipython" 'content resp))))
+  (parameterize ([current-execute exec]
+                 [current-messages-preprocessor
+                  (make-system-preprocessor (λ (sys) (make-llama3-system-template sys)))]
+                 [current-repl-prompt tool-repl-prompt])
+    (reset
+     (cond
+       [always?
+        (define old-chat (current-chat))
+        (define new-tools (if (memq nop tools) tools (cons nop tools)))
+        (define (always-chat s)
+          (match s
+            [(hash* ['role "ipython"]) (old-chat s)]
+            [else
+             (parameterize ([current-messages-preprocessor
+                             (make-last-user-preprocessor (λ (user) (make-llama3-prompt new-tools user)))]
+                            [current-json-schema (hasheq)])
+               (old-chat s))
+             (call/last-response
+              (λ (content)
+                (match (parse-llama3-toolcall content)
+                  [(hash* ['name "nop"])
+                   (undo)
+                   (old-chat s)]
+                  [else (void)])))]))
+        (shift k (parameterize ([current-chat always-chat]) (k)))]
+       [else
+        (shift k (parameterize ([current-messages-preprocessor
+                                 (make-last-user-preprocessor (λ (user) (make-llama3-prompt tools user)))])
+                   (k)))])
      (when auto?
        (shift k (parameterize ([current-chat (make-auto-execute-chat)]) (k))))
      (repl))))
