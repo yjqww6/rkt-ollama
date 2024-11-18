@@ -145,6 +145,6 @@ TPL
     (with-handlers ([exn:fail:read? (λ (e) #f)])
       (match (string->jsexpr response)
         [(hash 'name name 'parameters arguments)
-         (hasheq 'name name 'arguments arguments)]
+         (list (hasheq 'name name 'arguments arguments))]
         [else #f])))
   )

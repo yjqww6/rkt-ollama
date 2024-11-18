@@ -51,6 +51,17 @@
       (append m (list (hasheq 'role "user" 'content (f content)) pre))]
      [else messages])))
 
+(define (make-exec parse callback make-response role)
+  (λ (content)
+    (define calls (parse content))
+    (when (and calls (not (null? calls)))
+      (define resp
+        (string-join
+         (for/list ([call (in-list calls)])
+           (make-response (callback call)))
+         "\n"))
+      ((current-chat) (hasheq 'role role 'content resp)))))
+
 (define (use-nous-tools #:tools [tools default-tools]
                         #:auto? [auto? #f]
                         #:constrained? [constrained? (and (current-chat-template) #t)])
@@ -82,15 +93,8 @@
      (shift k (parameterize ([current-completion-endpoint new-completion]) (k))))
   
    (define callback (tools-callback tools))
-   (define (exec content)
-     (define calls (parse-nous-toolcall content))
-     (when (and calls (not (null? calls)))
-       (define resp
-         (string-join
-          (for/list ([call (in-list calls)])
-            (make-nous-response (callback call)))
-          "\n"))
-       ((current-chat) (make-user resp))))
+   (define exec
+     (make-exec parse-nous-toolcall callback make-nous-response "user"))
    (parameterize ([current-messages-preprocessor (make-system-preprocessor (λ (sys) (make-nous-system-template tools sys)))]
                   [current-execute exec]
                   [current-repl-prompt tool-repl-prompt])
@@ -99,46 +103,50 @@
         (shift k (parameterize ([current-chat (make-auto-execute-chat)]) (k))))
       (repl)))))
 
+(define (make-always-chat tools role parse call/setup)
+  (define old-chat (current-chat))
+  (define new-tools (if (memq nop tools) tools (cons nop tools)))
+  (λ (s)
+    (match s
+      [(hash* ['role r]) #:when (string=? role r) (old-chat s)]
+      [else
+       (call/setup new-tools (λ () (old-chat s)))
+       (call/last-response
+        (λ (content)
+          (match (parse content)
+            [(cons (hash* ['name "nop"]) _)
+             (undo)
+             (old-chat s)]
+            [else (void)])))])))
+
 ;;; chat-by-completion is needed
 (define (use-mistral-tools #:tools [tools default-tools]
                            #:auto? [auto? #f]
                            #:always? [always? #t])
-  (define new-tools (if (memq nop tools) tools (cons nop tools)))
-  (define callback (tools-callback new-tools))
-  (define (exec content)
-    (define calls (parse-mistral-toolcall content))
-    (when (and calls (not (null? calls)))
-      (define resp
-        (string-join
-         (for/list ([call (in-list calls)])
-           (make-mistral-response (callback call)))
-         "\n"))
-      ((current-chat) (hasheq 'role "tool" 'content resp))))
-  (define tools-string (tools->string new-tools))
+  (define callback (tools-callback tools))
+  (define exec
+    (make-exec parse-mistral-toolcall callback make-mistral-response "tool"))
   (parameterize ([current-execute exec]
                  [current-temperature 0.2]
                  [current-repl-prompt tool-repl-prompt])
     (reset
-     (when always?
-       (define old-chat (current-chat))
-       (define (always-chat s)
-         (match s
-           [(hash* ['role "tool"]) (old-chat s)]
-           [else
-            (parameterize ([current-chat-template (λ (messages) (mistral messages #:tools tools-string))]
-                           [current-output-prefix " ["]
-                           ; TODO grammar
-                           )
-              (old-chat s))
-            (unless auto?
-              (call/last-response
-               (λ (content)
-                 (match (parse-mistral-toolcall content)
-                   [(list (hash* ['name "nop"]))
-                    (undo)
-                    (old-chat s)]
-                   [else (void)]))))]))
-       (shift k (parameterize ([current-chat always-chat]) (k))))
+     (cond
+       [always?
+        (define always-chat
+          (make-always-chat
+           tools "tool" parse-mistral-toolcall
+           (λ (new-tools proc)
+             (define tools-string (tools->string new-tools))
+             (parameterize ([current-chat-template (λ (messages) (mistral messages #:tools tools-string))]
+                            [current-output-prefix " ["]
+                            ; TODO grammar
+                            )
+               (proc)))))
+        (shift k (parameterize ([current-chat always-chat]) (k)))]
+       [else
+        (define tools-string (tools->string tools))
+        (shift k (parameterize ([current-chat-template (λ (messages) (mistral messages #:tools tools-string))])
+                   (k)))])
      (when auto?
        (shift k (parameterize ([current-chat (make-auto-execute-chat)]) (k))))
      (repl))))
@@ -147,12 +155,8 @@
                           #:auto? [auto? #f]
                           #:always? [always? #t])
   (define callback (tools-callback tools))
-  (define (exec content)
-    (define call (parse-llama3-toolcall content))
-    (when call
-      (define resp
-        (jsexpr->string (callback call)))
-      ((current-chat) (hasheq 'role "ipython" 'content resp))))
+  (define exec
+    (make-exec parse-llama3-toolcall callback jsexpr->string "ipython"))
   (parameterize ([current-execute exec]
                  [current-messages-preprocessor
                   (make-system-preprocessor (λ (sys) (make-llama3-system-template sys)))]
@@ -160,23 +164,14 @@
     (reset
      (cond
        [always?
-        (define old-chat (current-chat))
-        (define new-tools (if (memq nop tools) tools (cons nop tools)))
-        (define (always-chat s)
-          (match s
-            [(hash* ['role "ipython"]) (old-chat s)]
-            [else
+        (define always-chat
+          (make-always-chat
+           tools "ipython" parse-llama3-toolcall
+           (λ (new-tools proc)
              (parameterize ([current-messages-preprocessor
                              (make-last-user-preprocessor (λ (user) (make-llama3-prompt new-tools user)))]
                             [current-json-schema (hasheq)])
-               (old-chat s))
-             (call/last-response
-              (λ (content)
-                (match (parse-llama3-toolcall content)
-                  [(hash* ['name "nop"])
-                   (undo)
-                   (old-chat s)]
-                  [else (void)])))]))
+               (proc)))))
         (shift k (parameterize ([current-chat always-chat]) (k)))]
        [else
         (shift k (parameterize ([current-messages-preprocessor
