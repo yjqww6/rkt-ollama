@@ -168,6 +168,7 @@
                     "use llama.cpp chatter with template"
                     (namespace-require llama-cpp ns)
                     (default-endpoint (cons "localhost" 8080))
+                    (current-message-style #f)
                     (case tpl
                       [("oai" "openai") (current-chat (make-default-chat chat))]
                       [else

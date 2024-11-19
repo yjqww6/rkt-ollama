@@ -1,5 +1,5 @@
 #lang racket/base
-(require racket/list racket/sequence racket/string)
+(require racket/list racket/match racket/sequence racket/string)
 (provide chatml llama3 gemma2 minitron minitron/stop mistral)
 ;;;; mostly for llama.cpp prefill
 
@@ -24,7 +24,16 @@
                [(string=? role "user") (or user role)]
                [(string=? role "assistant") (or assistant role)]
                [else role])
-             (string-trim (hash-ref msg 'content) #:left? #f)))
+             (string-trim
+              (match (hash-ref msg 'content)
+                [(? string? c) c]
+                [(list (and item (hash* ['type t])) ...)
+                 (apply string-append
+                        (for/list ([item (in-list item)]
+                                   [t (in-list t)]
+                                   #:when (string=? t "text"))
+                          (hash-ref item 'text)))])
+              #:left? #f)))
    msgs))
 
 (define (prefill-content msg)

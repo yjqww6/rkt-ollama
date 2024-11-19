@@ -7,6 +7,7 @@
 
 (define (build-options)
   (hash-param
+   'model (current-model)
    'stream (box (current-stream))
    'stream_options (and (current-stream) (hasheq 'include_usage #t))
    'temperature (current-temperature)

@@ -4,7 +4,8 @@
          syntax/parse/define
          racket/string racket/match)
 (provide (all-from-out "private/config.rkt" "private/history.rkt" "private/log.rkt")
-         current-chat-output-port current-assistant-start with-cust
+         current-chat-output-port current-assistant-start current-message-style
+         with-cust
          chat completion chat-by-completion
          use-ollama use-llama-cpp current-chat-template)
 
@@ -31,14 +32,29 @@
       [(not (car items)) (loop (cdr items) strs imgs)]
       [else (loop (cdr items) strs (cons (car items) imgs))])))
 
+(define current-message-style (make-parameter 'ollama))
+
 (define (build-message role items)
   (match items
     [(list (? hash? h)) h]
     [else
      (define-values (content images) (collect items))
-     (hash-param 'role role
-                 'content content
-                 'images images)]))
+     (cond
+       [(eq? (current-message-style) 'ollama)
+        (hash-param 'role role
+                    'content content
+                    'images images)]
+       [else
+        ;openai style
+        (hash-param 'role role
+                    'content
+                    (if images
+                        (cons
+                         (hasheq 'type "text" 'text content)
+                         (for/list ([img (in-list images)])
+                           (define d (string-append "data:image/jpeg;base64," img))
+                           (hasheq 'type "image_url" 'image_url (hasheq 'url d))))
+                        content))])]))
 
 (define current-chat-output-port
   (make-derived-parameter
