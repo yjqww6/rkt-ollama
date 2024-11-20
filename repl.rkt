@@ -321,7 +321,8 @@
                    [current-expeditor-ready-checker
                     (ready (current-expeditor-ready-checker))])
       (define (loop)
-        (define v (expeditor-read ee #:prompt ((current-repl-prompt))))
+        (define v (parameterize ([running? #f])
+                    (expeditor-read ee #:prompt ((current-repl-prompt)))))
         (cond
           [(eof-object? v) (void)]
           [(refreshing? v) (loop)]
