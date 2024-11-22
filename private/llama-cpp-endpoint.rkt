@@ -19,7 +19,8 @@
    'max_tokens (current-num-predict)
    'stop (current-stop)
    'grammar (current-grammar)
-   'json_schema (current-json-schema)
+   'json_schema (or (current-json-schema)
+                    (and (current-enforce-json) (hasheq)))
    (current-options)))
 
 (define ((reciever port))

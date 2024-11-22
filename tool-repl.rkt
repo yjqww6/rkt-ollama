@@ -51,7 +51,9 @@
       (append m (list (hasheq 'role "user" 'content (f content)) pre))]
      [else messages])))
 
-(define (make-exec parse callback make-response role)
+(define current-tool-role (make-parameter "user"))
+
+(define (make-exec parse callback make-response)
   (λ (content)
     (define calls (parse content))
     (when (and calls (not (null? calls)))
@@ -60,7 +62,7 @@
          (for/list ([call (in-list calls)])
            (make-response (callback call)))
          "\n"))
-      ((current-chat) (hasheq 'role role 'content resp)))))
+      ((current-chat) (hasheq 'role (current-tool-role) 'content resp)))))
 
 (define (use-nous-tools #:tools [tools default-tools]
                         #:auto? [auto? #f]
@@ -86,7 +88,7 @@
            (old-completion prompt (combine-output output p)))
          (when (has-tool)
            (define new-prompt (string-append prompt (get-output-string p) "<tool_call> "))
-           (parameterize ([current-json-schema (hasheq)])
+           (parameterize ([current-enforce-json #t])
              (write-string "<tool_call> " output)
              (old-completion new-prompt output)
              (write-string " </tool_call>" output)))))
@@ -94,7 +96,7 @@
   
    (define callback (tools-callback tools))
    (define exec
-     (make-exec parse-nous-toolcall callback make-nous-response "user"))
+     (make-exec parse-nous-toolcall callback make-nous-response))
    (parameterize ([current-messages-preprocessor (make-system-preprocessor (λ (sys) (make-nous-system-template tools sys)))]
                   [current-execute exec]
                   [current-repl-prompt tool-repl-prompt])
@@ -103,12 +105,12 @@
         (shift k (parameterize ([current-chat (make-auto-execute-chat)]) (k))))
       (repl)))))
 
-(define (make-always-chat tools role parse call/setup)
+(define (make-always-chat tools parse call/setup)
   (define old-chat (current-chat))
   (define new-tools (if (memq nop tools) tools (cons nop tools)))
   (λ (s)
     (match s
-      [(hash* ['role r]) #:when (string=? role r) (old-chat s)]
+      [(hash* ['role r]) #:when (string=? (current-tool-role) r) (old-chat s)]
       [else
        (call/setup new-tools (λ () (old-chat s)))
        (call/last-response
@@ -125,16 +127,17 @@
                            #:always? [always? #t])
   (define callback (tools-callback tools))
   (define exec
-    (make-exec parse-mistral-toolcall callback make-mistral-response "tool"))
+    (make-exec parse-mistral-toolcall callback make-mistral-response))
   (parameterize ([current-execute exec]
                  [current-temperature 0.2]
-                 [current-repl-prompt tool-repl-prompt])
+                 [current-repl-prompt tool-repl-prompt]
+                 [current-tool-role "tool"])
     (reset
      (cond
        [always?
         (define always-chat
           (make-always-chat
-           tools "tool" parse-mistral-toolcall
+           tools parse-mistral-toolcall
            (λ (new-tools proc)
              (define tools-string (tools->string new-tools))
              (parameterize ([current-chat-template (λ (messages) (mistral messages #:tools tools-string))]
@@ -156,21 +159,22 @@
                           #:always? [always? #t])
   (define callback (tools-callback tools))
   (define exec
-    (make-exec parse-llama3-toolcall callback jsexpr->string "ipython"))
+    (make-exec parse-llama3-toolcall callback jsexpr->string))
   (parameterize ([current-execute exec]
                  [current-messages-preprocessor
                   (make-system-preprocessor (λ (sys) (make-llama3-system-template sys)))]
-                 [current-repl-prompt tool-repl-prompt])
+                 [current-repl-prompt tool-repl-prompt]
+                 [current-tool-role "ipython"])
     (reset
      (cond
        [always?
         (define always-chat
           (make-always-chat
-           tools "ipython" parse-llama3-toolcall
+           tools parse-llama3-toolcall
            (λ (new-tools proc)
              (parameterize ([current-messages-preprocessor
                              (make-last-user-preprocessor (λ (user) (make-llama3-prompt new-tools user)))]
-                            [current-json-schema (hasheq)])
+                            [current-enforce-json #t])
                (proc)))))
         (shift k (parameterize ([current-chat always-chat]) (k)))]
        [else

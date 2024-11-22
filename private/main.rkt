@@ -12,7 +12,7 @@
      'tools (current-tools)
      'stream (box (current-stream))
      'options (current-options)
-     'format (current-response-format)))
+     'format (and (current-enforce-json) "json")))
   (response (send "/api/chat" data)))
 
 (define (handle-chat-response resp output)
@@ -59,7 +59,7 @@
                 'raw raw
                 'template template
                 'context context
-                'format (current-response-format)))
+                'format (and (current-enforce-json) "json")))
   (response (send "/api/generate" data)))
 
 (define (ollama-completion-endpoint prompt output)

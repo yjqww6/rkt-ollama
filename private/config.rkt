@@ -13,11 +13,10 @@
        [v (hash-set h k v)]
        [else h])]))
 
-(define current-model (make-parameter "gemma2"))
+(define current-model (make-parameter #f))
 (define default-system (make-parameter #f))
 (define current-tools (make-parameter #f))
 (define current-stream (make-parameter #t))
-(define current-response-format (make-parameter #f))
 
 (define default-endpoint (make-parameter (cons "localhost" 11434)))
 
@@ -64,5 +63,8 @@
   [current-num-predict num_predict]
   [current-stop stop])
 
+(define current-enforce-json (make-parameter #f))
+
+;;; llama.cpp only
 (define current-grammar (make-parameter #f))
 (define current-json-schema (make-parameter #f))
