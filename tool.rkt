@@ -107,7 +107,7 @@ TPL
 
   (define (parse-mistral-toolcall response)
     (define (parse calls)
-      (with-handlers ([exn:fail:read? (λ (e) #f)])
+      (with-handlers ([exn:fail? (λ (e) #f)])
         (match (string->jsexpr calls)
           [(and c (list (hash* ['name _] ['arguments _]) ...)) c]
           [else #f])))
@@ -142,7 +142,7 @@ TPL
      (string-join (map tool->string tools) "\n")
      user))
   (define (parse-llama3-toolcall response)
-    (with-handlers ([exn:fail:read? (λ (e) #f)])
+    (with-handlers ([exn:fail? (λ (e) #f)])
       (match (string->jsexpr response)
         [(hash 'name name 'parameters arguments)
          (list (hasheq 'name name 'arguments arguments))]
