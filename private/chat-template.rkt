@@ -1,6 +1,7 @@
 #lang racket/base
 (require racket/list racket/match racket/sequence racket/string)
-(provide chatml llama3 gemma2 minitron minitron/stop mistral mistral/new)
+(provide chatml llama3 gemma2 minitron minitron/stop mistral mistral/new
+         current-tools-string)
 ;;;; mostly for llama.cpp prefill
 
 (define (split-messages messages [merge-system? #t])
@@ -96,7 +97,9 @@
 (define (last-msg msgs)
   (if (null? msgs) #f (last msgs)))
 
-(define (mistral messages #:tools [tools #f])
+(define current-tools-string (make-parameter #f))
+
+(define (mistral messages)
   (define s (open-output-string))
   (define-values (sys msgs prefill) (split-messages messages #f))
   (define new-msgs (inject-system-to-first-user msgs sys))
@@ -108,13 +111,14 @@
       [(string=? role "tool") (fprintf s "~a" content)]
       [else
        (when (eq? last msg)
+         (define tools (current-tools-string))
          (when tools
            (fprintf s "[AVAILABLE_TOOLS] ~a[/AVAILABLE_TOOLS]" tools)))
        (fprintf s "[INST] ~a[/INST]" content)]))
   (fprintf s "~a" (prefill-content prefill))
   (get-output-string s))
 
-(define (mistral/new messages #:tools [tools #f])
+(define (mistral/new messages)
   (define s (open-output-string))
   (define-values (msgs prefill) (split-messages messages))
   (define last (last-msg msgs))
@@ -126,6 +130,7 @@
       [(string=? role "tool") (fprintf s "~a" content)]
       [else
        (when (eq? last msg)
+         (define tools (current-tools-string))
          (when tools
            (fprintf s "[AVAILABLE_TOOLS] ~a[/AVAILABLE_TOOLS]" tools)))
        (fprintf s "[INST] ~a[/INST]" content)]))

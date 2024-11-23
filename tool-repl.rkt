@@ -140,7 +140,7 @@
            tools parse-mistral-toolcall
            (λ (new-tools proc)
              (define tools-string (tools->string new-tools))
-             (parameterize ([current-chat-template (λ (messages) (mistral messages #:tools tools-string))]
+             (parameterize ([current-tools-string tools-string]
                             [current-output-prefix " ["]
                             ; TODO grammar
                             )
@@ -148,7 +148,7 @@
         (shift k (parameterize ([current-chat always-chat]) (k)))]
        [else
         (define tools-string (tools->string tools))
-        (shift k (parameterize ([current-chat-template (λ (messages) (mistral messages #:tools tools-string))])
+        (shift k (parameterize ([current-tools-string tools-string])
                    (k)))])
      (when auto?
        (shift k (parameterize ([current-chat (make-auto-execute-chat)]) (k))))
