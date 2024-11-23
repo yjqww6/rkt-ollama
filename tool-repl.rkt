@@ -32,7 +32,7 @@
   (chat s)
   (match (current-history)
     [(list _ ... (hash* ['role "assistant"] ['content content]))
-     ((current-execute) content)]
+     ((current-execute) content #:auto? #t)]
     [else (void)]))
 
 (define ((make-system-preprocessor f [next (current-messages-preprocessor)]) messages)
@@ -53,16 +53,23 @@
 
 (define current-tool-role (make-parameter "user"))
 
+(define current-auto-guard (make-parameter #f))
+
 (define (make-exec parse callback make-response)
-  (λ (content)
-    (define calls (parse content))
-    (when (and calls (not (null? calls)))
-      (define resp
-        (string-join
-         (for/list ([call (in-list calls)])
-           (make-response (callback call)))
-         "\n"))
-      ((current-chat) (hasheq 'role (current-tool-role) 'content resp)))))
+  (λ (content #:auto? [auto? #f])
+    (let/ec k
+      (define calls (parse content))
+      (when (and calls (not (null? calls)))
+        (when auto?
+          (define guard (current-auto-guard))
+          (when (and guard (not (guard calls)))
+            (k)))
+        (define resp
+          (string-join
+           (for/list ([call (in-list calls)])
+             (make-response (callback call)))
+           "\n"))
+        ((current-chat) (hasheq 'role (current-tool-role) 'content resp))))))
 
 (define (use-nous-tools #:tools [tools default-tools]
                         #:auto? [auto? #f]
