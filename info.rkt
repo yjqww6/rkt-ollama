@@ -7,3 +7,4 @@
 (define version "0.0")
 (define pkg-authors '(yjqww6))
 (define license '(Apache-2.0 OR MIT))
+(define compile-omit-paths '("examples"))
