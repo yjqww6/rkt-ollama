@@ -23,7 +23,7 @@
                 (~? (~@ 'items Items))))))
 
 (define-syntax-parser define-tool
-  [(_ (Tool:id Param:Param ...) #:desc Desc:string Body:expr ...+)
+  [(_ (Tool:id Param:Param ...) #:desc Desc:expr Body:expr ...+)
    #'(define Tool
        (tool
         (λ (arg)
