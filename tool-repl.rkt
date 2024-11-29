@@ -148,9 +148,7 @@
            (λ (new-tools proc)
              (define tools-string (tools->string new-tools))
              (parameterize ([current-tools-string tools-string]
-                            [current-output-prefix " ["]
-                            ; TODO grammar
-                            )
+                            [current-output-prefix "[TOOL_CALLS]"])
                (proc)))))
         (shift k (parameterize ([current-chat always-chat]) (k)))]
        [else

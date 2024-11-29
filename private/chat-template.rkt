@@ -109,7 +109,7 @@
         [msg (in-list new-msgs)])
     (cond
       [(string=? role "assistant") (fprintf s "~a</s>" content)]
-      [(string=? role "tool") (fprintf s "~a" content)]
+      [(string=? role "tool") (fprintf s "[TOOL_RESULTS] ~a[/TOOL_RESULTS]" content)]
       [else
        (when (eq? last msg)
          (define tools (current-tools-string))
@@ -128,7 +128,7 @@
     (cond
       [(string=? role "system") (fprintf s "[SYSTEM_PROMPT] ~a[/SYSTEM_PROMPT]" content)]
       [(string=? role "assistant") (fprintf s "~a</s>" content)]
-      [(string=? role "tool") (fprintf s "~a" content)]
+      [(string=? role "tool") (fprintf s "[TOOL_RESULTS] ~a[/TOOL_RESULTS]" content)]
       [else
        (when (eq? last msg)
          (define tools (current-tools-string))

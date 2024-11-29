@@ -110,6 +110,10 @@ TPL
       (with-handlers ([exn:fail? (λ (e) #f)])
         (match (string->jsexpr calls)
           [(and c (list (hash* ['name _] ['arguments _]) ...)) c]
+          [(list (hash* ['name ns] ['parameters ps]) ...)
+           (for/list ([n (in-list ns)]
+                      [p (in-list ps)])
+             (hasheq 'name n 'arguments p))]
           [else #f])))
     (match (regexp-match #px"\\[TOOL_CALLS\\]\\s*(.*)" response)
       [(cons _ (list calls))
@@ -117,7 +121,7 @@ TPL
       [else (parse response)]))
 
   (define (make-mistral-response response)
-    (format "[TOOL_RESULTS] ~a[/TOOL_RESULTS]" (jsexpr->string (hasheq 'content response))))
+    (jsexpr->string (hasheq 'content response)))
 
   (define (make-llama3-system-template system)
     (string-append
