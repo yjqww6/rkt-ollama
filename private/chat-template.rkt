@@ -1,6 +1,6 @@
 #lang racket/base
 (require racket/list racket/match racket/sequence racket/string)
-(provide chatml llama3 gemma2 minitron minitron/stop mistral mistral/new
+(provide chatml llama3 gemma2 minitron minitron/stop mistral mistral/v7
          current-tools-string)
 ;;;; mostly for llama.cpp prefill
 
@@ -99,6 +99,7 @@
 
 (define current-tools-string (make-parameter #f))
 
+;;; mistral v3
 (define (mistral messages)
   (define s (open-output-string))
   (define-values (sys msgs prefill) (split-messages messages #f))
@@ -118,7 +119,7 @@
   (fprintf s "~a" (prefill-content prefill))
   (get-output-string s))
 
-(define (mistral/new messages)
+(define (mistral/v7 messages)
   (define s (open-output-string))
   (define-values (msgs prefill) (split-messages messages))
   (define last (last-msg msgs))
