@@ -18,8 +18,8 @@
 
 (define (execute)
   (match (current-history)
-    [(list _ ... (hash* ['role "assistant"] ['content content]))
-     ((current-execute) content)]
+    [(list _ ... (and assistant (hash* ['role "assistant"])))
+     ((current-execute) assistant)]
     [else (void)]))
 
 (define (call/last-response proc)
@@ -31,8 +31,8 @@
 (define ((make-auto-execute-chat [chat (current-chat)]) s)
   (chat s)
   (match (current-history)
-    [(list _ ... (hash* ['role "assistant"] ['content content]))
-     ((current-execute) content #:auto? #t)]
+    [(list _ ... (and assistant (hash* ['role "assistant"])))
+     ((current-execute) assistant #:auto? #t)]
     [else (void)]))
 
 (define ((make-system-preprocessor f [next (current-messages-preprocessor)]) messages)
@@ -55,10 +55,10 @@
 
 (define current-auto-guard (make-parameter #f))
 
-(define (make-exec parse callback make-response)
-  (λ (content #:auto? [auto? #f])
+(define (make-exec parse callback make-response #:parse-content? [parse-content? #t])
+  (λ (assistant #:auto? [auto? #f])
     (let/ec k
-      (define calls (parse content))
+      (define calls (parse (if parse-content? (hash-ref assistant 'content) assistant)))
       (when (and calls (not (null? calls)))
         (when auto?
           (define guard (current-auto-guard))
@@ -189,3 +189,21 @@
      (when auto?
        (shift k (parameterize ([current-chat (make-auto-execute-chat)]) (k))))
      (repl))))
+
+(define (use-ollama-tools #:tools [tools default-tools]
+                          #:auto? [auto? #f])
+  (define callback (tools-callback tools))
+  (define exec
+    (make-exec (λ (assistant)
+                 (match assistant
+                   [(hash* ['tool-calls (list (hash 'function calls) ...)])
+                    calls]
+                   [else #f]))
+               callback
+               jsexpr->string
+               #:parse-content? #f))
+  (parameterize ([current-tools (map tool-desc tools)]
+                 [current-repl-prompt tool-repl-prompt]
+                 [current-execute exec]
+                 [current-tool-role "tool"])
+    (repl)))

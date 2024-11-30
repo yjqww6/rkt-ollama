@@ -46,7 +46,8 @@
                       (when on-abort (on-abort)))])
     (proc)))
 
-(define (call/history message proc #:assistant-start [fake #f])
+(define (call/history message proc
+                      #:assistant-start [fake #f])
   (define messages
     ((current-messages-preprocessor)
      (append-history
@@ -55,13 +56,18 @@
       message
       (fake-assistant fake))))
   (define sp (open-output-string))
-  (proc messages sp)
+  (define tool-calls '())
+  (define (save-tool-calls ts)
+    (set! tool-calls (append tool-calls ts)))
+  (proc messages sp save-tool-calls)
   (current-history
    (append-history
     (current-history)
     message
-    (hasheq 'role "assistant"
-            'content (get-output-string sp)))))
+    (hash-param 'role "assistant"
+                'content (get-output-string sp)
+                'tool-calls (and (not (null? tool-calls))
+                                 tool-calls)))))
 
 (define current-chat-endpoint
   (make-parameter (λ (messages output [fake #f]) (error 'chat "no endpoint"))))
@@ -73,17 +79,17 @@
                              #:assistant-start [fake #f])
   (call/history
    message
-   (λ (messages sp)
+   (λ (messages sp tool-calls-output)
      (call/interrupt
       (λ ()
-        ((current-chat-endpoint) messages (combine-output sp output) fake))))
+        ((current-chat-endpoint) messages (combine-output sp output) fake tool-calls-output))))
    #:assistant-start fake))
 
 (define (completion/history/output message output
                                    #:assistant-start [fake #f] #:template [template (current-chat-template)])
   (call/history
    message
-   (λ (messages sp)
+   (λ (messages sp _)
      (define prompt (template messages))
      (define new-output (combine-output sp output))
      (when fake (write-string fake new-output))

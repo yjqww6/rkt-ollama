@@ -69,7 +69,7 @@
     [else
      (proc messages)]))
 
-(define (llama-cpp-chat-endpoint messages output [fake #f])
+(define (llama-cpp-chat-endpoint messages output [fake #f] [tool-calls-output void])
   (call/prefill-workaround
    messages
    (λ (messages)

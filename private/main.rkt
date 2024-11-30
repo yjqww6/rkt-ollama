@@ -29,11 +29,15 @@
      'format (and (current-enforce-json) "json")))
   (response (send "/api/chat" data)))
 
-(define (handle-chat-response resp output)
+(define (handle-chat-response resp output tool-calls-output)
   (for ([j resp]
         #:final (hash-ref j 'done #f))
     (log-resp-trace j)
     (perf-trace j)
+    (match j
+      [(hash* ['message (hash* ['tool_calls tool-calls])])
+       (tool-calls-output tool-calls)]
+      [else (void)])
     (match j
       [(hash* ['message (hash* ['content content])])
        (write-string content output)
@@ -41,10 +45,10 @@
       [(hash* ['error err])
        (error 'chat/history "~a" err)])))
 
-(define (ollama-chat-endpoint messages output [fake #f])
+(define (ollama-chat-endpoint messages output [fake #f] [tool-calls-output void])
   (define resp (chat messages))
   (when fake (write-string fake output))
-  (handle-chat-response resp output)
+  (handle-chat-response resp output tool-calls-output)
   (close-response resp))
 
 (define (handle-generate-response resp output)
