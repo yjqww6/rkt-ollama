@@ -3,7 +3,6 @@
 (require racket/string racket/match json)
 (provide current-options current-grammar
          llama-cpp-chat-endpoint llama-cpp-completion-endpoint)
-(define current-options (make-parameter (hasheq 'cache_prompt #t)))
 
 (define (build-options)
   (hash-param
@@ -21,6 +20,7 @@
    'grammar (current-grammar)
    'json_schema (or (current-json-schema)
                     (and (current-enforce-json) (hasheq)))
+   'cache_prompt #t
    (current-options)))
 
 (define ((reciever port))

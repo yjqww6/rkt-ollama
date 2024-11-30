@@ -4,6 +4,20 @@
 (provide  generate ollama-chat-endpoint ollama-completion-endpoint
           embeddings list-models)
 
+(define (build-options)
+  (hash-param
+   'num_ctx (current-context-window)
+   'temperature (current-temperature)
+   'repeat_penalty (current-repeat-penalty)
+   'repeat_last_n (current-repeat-last-n)
+   'top_p (current-top-p)
+   'min_p (current-min-p)
+   'top_k (current-top-k)
+   'seed (current-seed)
+   'num_predict (current-num-predict)
+   'stop (current-stop)
+   (current-options)))
+
 (define (chat messages)
   (define data
     (hash-param
@@ -11,7 +25,7 @@
      'messages messages
      'tools (current-tools)
      'stream (box (current-stream))
-     'options (current-options)
+     'options (build-options)
      'format (and (current-enforce-json) "json")))
   (response (send "/api/chat" data)))
 

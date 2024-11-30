@@ -33,38 +33,21 @@
 
 (define current-options (make-parameter #f))
 
-(define (make-option key opt)
-  (make-derived-parameter
-   opt
-   (λ (v) (cond
-            [v (hash-set (or (opt) (hasheq)) key v)]
-            [(opt)
-             =>
-             (λ (o) (hash-remove o key))]
-            [else #f]))
-   (λ (v) (cond
-            [v
-             =>
-             (λ (c) (hash-ref c key #f))]
-            [else #f]))))
-
-(define-syntax-parse-rule (define-options [Name:id Key:id] ...)
-  (begin (define Name (make-option 'Key current-options)) ...))
+(define-syntax-parse-rule (define-options [Name:id (~optional Def:expr #:defaults ([Def #'#f]))] ...)
+  (begin (define Name (make-parameter Def)) ...))
 
 (define-options
-  [current-context-window num_ctx]
-  [current-temperature temperature]
-  [current-repeat-penalty repeat_penalty]
-  [current-repeat-last-n repeat_last_n]
-  [current-top-p top_p]
-  [current-min-p min_p]
-  [current-top-k top_k]
-  [current-seed seed]
-  [current-num-predict num_predict]
-  [current-stop stop])
-
-(define current-enforce-json (make-parameter #f))
-
-;;; llama.cpp only
-(define current-grammar (make-parameter #f))
-(define current-json-schema (make-parameter #f))
+  [current-context-window 8192]
+  [current-temperature]
+  [current-repeat-penalty]
+  [current-repeat-last-n]
+  [current-top-p]
+  [current-min-p]
+  [current-top-k]
+  [current-seed]
+  [current-num-predict]
+  [current-stop]
+  [current-enforce-json]
+  ;; llama.cpp only
+  [current-grammar]
+  [current-json-schema])
