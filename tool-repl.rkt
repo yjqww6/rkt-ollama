@@ -206,4 +206,7 @@
                  [current-repl-prompt tool-repl-prompt]
                  [current-execute exec]
                  [current-tool-role "tool"])
-    (repl)))
+    (reset
+     (when auto?
+       (shift k (parameterize ([current-chat (make-auto-execute-chat)]) (k))))
+     (repl))))
