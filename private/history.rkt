@@ -40,7 +40,7 @@
   (let loop ([ls (reverse (current-history))])
     (match ls
       ['() (void)]
-      [(cons (hash* ['role "user"]) r) (current-history (reverse r))]
+      [(cons (hash* ['role (not "assistant")]) r) (current-history (reverse r))]
       [(cons m r) (loop r)])))
 
 (define (history-pop)
