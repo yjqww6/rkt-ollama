@@ -1,6 +1,6 @@
 #lang racket/base
-(require racket/date racket/string racket/match racket/control json
-         "tool.rkt" "repl.rkt" "private/chat-template.rkt" "private/history.rkt" "main.rkt"
+(require racket/date racket/string racket/match racket/control json racket/port
+         "private/common.rkt" "tool.rkt" "repl.rkt" "private/chat-template.rkt" "main.rkt"
          (submod "tool.rkt" template))
 (provide (all-from-out "tool.rkt") (all-defined-out))
 
@@ -71,12 +71,42 @@
            "\n"))
         ((current-chat) (hasheq 'role (current-tool-role) 'content resp))))))
 
+(define (make-json-gbnf root)
+  (string-append
+   "root ::= " root "\n"
+   #<<GBNF
+value  ::= object | array | string | number | ("true" | "false" | "null") ws
+
+object ::=
+  "{" ws (
+            string ":" ws value
+    ("," ws string ":" ws value)*
+  )? "}" ws
+
+array  ::=
+  "[" ws (
+            value
+    ("," ws value)*
+  )? "]" ws
+
+string ::=
+  "\"" (
+    [^"\\\x7F\x00-\x1F] |
+    "\\" (["\\bfnrt] | "u" [0-9a-fA-F]{4}) # escapes
+  )* "\"" ws
+
+number ::= ("-"? ([0-9] | [1-9] [0-9]{0,15})) ("." [0-9]+)? ([eE] [-+]? [0-9] [1-9]{0,15})? ws
+
+# Optional space: by convention, applied in this grammar after literal chars when allowed
+ws ::= | " " | "\n" [ \t]{0,20}
+GBNF
+                 ))
+
 (define (use-nous-tools #:tools [tools default-tools]
                         #:auto? [auto? #f]
                         #:constrained? [constrained? (and (current-chat-template) #t)])
   (reset
    (when constrained?
-     (local-require "private/common.rkt" racket/port racket/string json)
      (define has-tool (make-parameter #f))
      (define old-trace (current-resp-trace))
      (define (new-trace net)
@@ -94,11 +124,11 @@
                         [current-resp-trace new-trace])
            (old-completion prompt (combine-output output p)))
          (when (has-tool)
-           (define new-prompt (string-append prompt (get-output-string p) "<tool_call> "))
-           (parameterize ([current-enforce-json #t])
-             (write-string "<tool_call> " output)
-             (old-completion new-prompt output)
-             (write-string " </tool_call>" output)))))
+           (define new-prompt (string-append prompt (get-output-string p) "<tool_call>"))
+           (parameterize (#;[current-enforce-json #t]
+                          [current-grammar (make-json-gbnf " ws object \"</tool_call>\"")])
+             (write-string "<tool_call>" output)
+             (old-completion new-prompt output)))))
      (shift k (parameterize ([current-completion-endpoint new-completion]) (k))))
   
    (define callback (tools-callback tools))
@@ -142,13 +172,15 @@
     (reset
      (cond
        [always?
+        (define old-completion (current-completion-endpoint))
         (define always-chat
           (make-always-chat
            tools parse-mistral-toolcall
            (λ (new-tools proc)
              (define tools-string (tools->string new-tools))
              (parameterize ([current-tools-string tools-string]
-                            [current-output-prefix "[TOOL_CALLS] ["])
+                            [current-output-prefix "[TOOL_CALLS] ["]
+                            [current-grammar (make-json-gbnf "object \"]\"")])
                (proc)))))
         (shift k (parameterize ([current-chat always-chat]) (k)))]
        [else
