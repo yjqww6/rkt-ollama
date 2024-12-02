@@ -11,9 +11,11 @@
                       (~alt
                        (~once (~seq #:desc Desc:string))
                        (~optional (~seq #:enum Enum:expr))
-                       (~optional
-                        (~and #:required (~bind [(Required 1) #'(Name)]))
-                        #:defaults ([(Required 1) #'()]))
+                       (~optional (~and (~seq #:def E:expr)
+                                        (~bind [(Def 1) (list #'(λ () E))]
+                                               [(Required 1) '()]))
+                                  #:defaults ([(Def 1) '()]
+                                              [(Required 1) (list #'Name)]))
                        (~optional (~seq #:items Items:expr)))
                       ...]
       #:with Prop
@@ -27,7 +29,7 @@
    #'(define Tool
        (tool
         (λ (arg)
-          (define Param.Name (hash-ref arg 'Param.Name)) ...
+          (define Param.Name (hash-ref arg 'Param.Name Param.Def ...)) ...
           Body ...)
         (hasheq
          'type "function"
@@ -37,7 +39,7 @@
                  'parameters
                  (hasheq 'type "object"
                          'properties (hasheq (~@ 'Param.Name Param.Prop) ...)
-                         'required (list (symbol->string 'Param.Name) ...))))))])
+                         'required (map symbol->string (list 'Param.Required ... ...)))))))])
 
 (define (tools-callback tools)
   (define m

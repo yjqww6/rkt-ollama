@@ -32,6 +32,9 @@
   (chat s)
   (match (current-history)
     [(list _ ... (and assistant (hash* ['role "assistant"])))
+     (unless (let-values ([(line col pos) (port-next-location (current-output-port))])
+               (eq? col 0))
+       (newline))
      ((current-execute) assistant #:auto? #t)]
     [else (void)]))
 
@@ -100,7 +103,7 @@ number ::= ("-"? ([0-9] | [1-9] [0-9]{0,15})) ("." [0-9]+)? ([eE] [-+]? [0-9] [1
 # Optional space: by convention, applied in this grammar after literal chars when allowed
 ws ::= | " " | "\n" [ \t]{0,20}
 GBNF
-                 ))
+   ))
 
 (define (use-nous-tools #:tools [tools default-tools]
                         #:auto? [auto? #f]
