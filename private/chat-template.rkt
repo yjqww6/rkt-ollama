@@ -1,6 +1,6 @@
 #lang racket/base
 (require racket/list racket/match racket/sequence racket/string)
-(provide chatml llama3 gemma2 minitron minitron/stop mistral mistral/v7
+(provide chatml llama3 gemma2 minitron minitron/stop mistral mistral/v7 mistral/v3/tekken
          current-tools-string)
 ;;;; mostly for llama.cpp prefill
 
@@ -99,41 +99,37 @@
 
 (define current-tools-string (make-parameter #f))
 
-;;; mistral v3
-(define (mistral messages)
+(define (mistral/internal messages v7? tekken?)
+  (define merge-sys? (not v7?))
+  (define leading-space (if tekken? "" " "))
   (define s (open-output-string))
-  (define-values (sys msgs prefill) (split-messages messages #f))
+  (define-values (sys msgs prefill)
+    (if merge-sys?
+        (let-values ([(msgs prefill) (split-messages messages #t)])
+          (values #f msgs prefill))
+        (split-messages messages #f)))
   (define new-msgs (inject-system-to-first-user msgs sys))
   (define last (last-msg new-msgs))
   (for ([(role content) (in-messages new-msgs)]
         [msg (in-list new-msgs)])
     (cond
+      [(string=? role "system") (fprintf s "[SYSTEM_PROMPT] ~a[/SYSTEM_PROMPT]" content)]
       [(string=? role "assistant") (fprintf s "~a</s>" content)]
-      [(string=? role "tool") (fprintf s "[TOOL_RESULTS] ~a[/TOOL_RESULTS]" content)]
+      [(string=? role "tool") (fprintf s "[TOOL_RESULTS]~a~a[/TOOL_RESULTS]" leading-space content)]
       [else
        (when (eq? last msg)
          (define tools (current-tools-string))
          (when tools
-           (fprintf s "[AVAILABLE_TOOLS] ~a[/AVAILABLE_TOOLS]" tools)))
-       (fprintf s "[INST] ~a[/INST]" content)]))
+           (fprintf s "[AVAILABLE_TOOLS]~a~a[/AVAILABLE_TOOLS]" leading-space tools)))
+       (fprintf s "[INST]~a~a[/INST]" leading-space content)]))
   (fprintf s "~a" (prefill-content prefill))
   (get-output-string s))
 
-(define (mistral/v7 messages)
-  (define s (open-output-string))
-  (define-values (msgs prefill) (split-messages messages))
-  (define last (last-msg msgs))
-  (for ([(role content) (in-messages msgs)]
-        [msg (in-list msgs)])
-    (cond
-      [(string=? role "system") (fprintf s "[SYSTEM_PROMPT] ~a[/SYSTEM_PROMPT]" content)]
-      [(string=? role "assistant") (fprintf s "~a</s>" content)]
-      [(string=? role "tool") (fprintf s "[TOOL_RESULTS] ~a[/TOOL_RESULTS]" content)]
-      [else
-       (when (eq? last msg)
-         (define tools (current-tools-string))
-         (when tools
-           (fprintf s "[AVAILABLE_TOOLS] ~a[/AVAILABLE_TOOLS]" tools)))
-       (fprintf s "[INST] ~a[/INST]" content)]))
-  (fprintf s "~a" (prefill-content prefill))
-  (get-output-string s))
+(define (mistral msgs)
+  (mistral/internal msgs #f #f))
+
+(define (mistral/v7 msgs)
+  (mistral/internal msgs #t #f))
+
+(define (mistral/v3/tekken msgs)
+  (mistral/internal msgs #f #t))

@@ -179,8 +179,8 @@ GBNF
            (λ (new-tools proc)
              (define tools-string (tools->string new-tools))
              (parameterize ([current-tools-string tools-string]
-                            [current-output-prefix "[TOOL_CALLS] ["]
-                            [current-grammar (make-json-gbnf "object \"]\"")])
+                            [current-output-prefix "[TOOL_CALLS]"]
+                            [current-grammar (make-json-gbnf "ws \"[\" object \"]\"")])
                (proc)))))
         (shift k (parameterize ([current-chat always-chat]) (k)))]
        [else
