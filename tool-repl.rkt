@@ -74,9 +74,14 @@
            "\n"))
         ((current-chat) (hasheq 'role (current-tool-role) 'content resp))))))
 
-(define (make-json-gbnf root)
+(define (make-json-gbnf . root)
+  (define root-string
+    (let ([s (open-output-string)])
+      (for ([r (in-list root)])
+        (fprintf s "~s " r))
+      (get-output-string s)))
   (string-append
-   "root ::= " root "\n"
+   "root ::= " root-string "\n"
    #<<GBNF
 value  ::= object | array | string | number | ("true" | "false" | "null") ws
 
@@ -129,7 +134,7 @@ GBNF
          (when (has-tool)
            (define new-prompt (string-append prompt (get-output-string p) "<tool_call>"))
            (parameterize (#;[current-enforce-json #t]
-                          [current-grammar (make-json-gbnf " ws object \"</tool_call>\"")])
+                          [current-grammar (make-json-gbnf 'ws 'object "</tool_call>")])
              (write-string "<tool_call>" output)
              (old-completion new-prompt output)))))
      (shift k (parameterize ([current-completion-endpoint new-completion]) (k))))
@@ -183,7 +188,7 @@ GBNF
              (define tools-string (tools->string new-tools))
              (parameterize ([current-tools-string tools-string]
                             [current-output-prefix "[TOOL_CALLS]"]
-                            [current-grammar (make-json-gbnf "ws \"[\" object \"]\"")])
+                            [current-grammar (make-json-gbnf 'ws "[" 'object "]")])
                (proc)))))
         (shift k (parameterize ([current-chat always-chat]) (k)))]
        [else
