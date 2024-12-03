@@ -1,5 +1,6 @@
 #lang racket/base
-(require racket/system racket/file racket/date racket/exn "../tool.rkt")
+(require racket/system racket/match racket/file racket/date racket/exn db json
+         "../tool.rkt")
 (provide (all-defined-out))
 
 (define (system/string cmd)
@@ -72,3 +73,49 @@
     #t))
 
 (define filesystem-tools (list list_dir read_file create_file create_dir))
+
+(define (default-db)
+  (sqlite3-connect #:database "example.db"
+                   #:mode 'create
+                   #:use-place #t))
+
+(define current-db (make-parameter #f))
+
+(define (get-db)
+  (cond
+    [(current-db) => values]
+    [else
+     (define db (default-db))
+     (current-db db)
+     db]))
+
+(define-tool (db_query [stmt : string #:desc "sql stmt to be executed"]
+                       [args : array #:desc "arguments if stmt need prepared" #:def '()
+                             #:items (hasheq 'anyOf (list (hasheq 'type "string") (hasheq 'type "number")))])
+  #:desc "execute a sql stmt in current sqlite database. remember to check the table info before performing a query or insert"
+  (begin-tool
+    (define db (get-db))
+    (define res (apply query db (prepare db stmt)
+                       (map (λ (arg) (if (eq? (json-null) arg)
+                                         sql-null
+                                         arg))
+                            args)))
+    (match res
+      [(simple-result (list (cons ks vs) ...))
+       (for/hasheq ([k (in-list ks)]
+                    [v (in-list vs)]
+                    #:when (jsexpr? v))
+         (values k v))]
+      [(rows-result headers rows)
+       (define names
+         (for/list ([h (in-list headers)])
+           (string->symbol (cdr (assq 'name h)))))
+       (for/list ([row (in-list rows)])
+         (for/hasheq ([n (in-list names)]
+                      [f (in-vector row)])
+           (values
+            n
+            (cond
+              [(jsexpr? f) f]
+              [(sql-null? f) (json-null)]
+              [else (error 'db_query "unsupported type")]))))])))
