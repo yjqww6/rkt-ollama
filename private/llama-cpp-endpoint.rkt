@@ -42,14 +42,21 @@
     (send "/v1/chat/completions" data))
   (response/producer p (reciever p)))
 
+(define (log-perf j)
+  (match j
+    [(hash* ['timings (hash* ['prompt_n prompt-tokens] ['predicted_n eval-tokens]
+                             ['prompt_ms prompt-duration] ['predicted_ms eval-duration]
+                             ['prompt_per_second prompt-tokens-per-second]
+                             ['predicted_per_second eval-tokens-per-seoncd])])
+     (log-perf-trace (perf prompt-tokens eval-tokens (/ prompt-duration 1e3) (/ eval-duration 1e3)
+                           prompt-tokens-per-second eval-tokens-per-seoncd))]
+    [else (void)]))
+
 (define (handle-chat-response resp output)
   (let/ec k
     (for ([j resp])
       (log-resp-trace j)
-      (match j
-        [(hash* ['usage (hash* ['completion_tokens eval_count] ['prompt_tokens prompt_eval_count])])
-         (log-perf-trace (perf prompt_eval_count eval_count #f #f #f #f))]
-        [else (void)])
+      (log-perf j)
       (match j
         [(hash* ['choices (list (or (hash* ['delta (hash* ['content content])])
                                     (hash* ['message (hash* ['content content])])) _ ...)])
@@ -81,14 +88,7 @@
   (let/ec k
     (for ([j resp])
       (log-resp-trace j)
-      (match j
-        [(hash* ['tokens_evaluated prompt-tokens] ['tokens_predicted eval-tokens]
-                ['timings (hash* ['prompt_ms prompt-duration] ['predicted_ms eval-duration]
-                                 ['prompt_per_second prompt-tokens-per-second]
-                                 ['predicted_per_second eval-tokens-per-seoncd])])
-         (log-perf-trace (perf prompt-tokens eval-tokens (/ prompt-duration 1e3) (/ eval-duration 1e3)
-                               prompt-tokens-per-second eval-tokens-per-seoncd))]
-        [else (void)])
+      (log-perf j)
       (match j
         [(hash* ['content content] ['stop stop])
          (write-string content output)
