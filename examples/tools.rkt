@@ -1,5 +1,5 @@
 #lang racket/base
-(require racket/system racket/date racket/exn "../tool.rkt")
+(require racket/system racket/file racket/date racket/exn "../tool.rkt")
 (provide (all-defined-out))
 
 (define (system/string cmd)
@@ -49,10 +49,26 @@
       (λ (p)
         (when offset
           (file-position p offset))
-        (define str (read-string limit p))
+        (define str (let ([v (read-string limit p)])
+                      (if (eof-object? v) "" v)))
         (define next (file-position p))
         (if (eof-object? (peek-char p))
             (hasheq 'content str 'all #t)
             (hasheq 'content str 'next_offset next 'all #f))))))
 
-(define filesystem-tools (list list_dir read_file))
+(define-tool (create_file [path : string #:desc "path of the file to be created"]
+                          [content : string #:desc "content of the creating file"])
+  #:desc "create a new file"
+  (begin-tool
+    (with-handlers* ([exn:fail:filesystem:exists?
+                      (λ (e) (hasheq 'err "file exists, use a different name instead."))])
+      (display-to-file content (expand-user-path path))
+      #t)))
+
+(define-tool (create_dir [path : string #:desc "path of the directory to be created"])
+  #:desc "create a new directory"
+  (begin-tool
+    (make-directory* (expand-user-path path))
+    #t))
+
+(define filesystem-tools (list list_dir read_file create_file create_dir))
