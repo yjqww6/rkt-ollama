@@ -6,7 +6,8 @@
 
 ;; example tools
 (define-tool (get_current_time) #:desc "get the current time"
-  (date->string (current-date) #t))
+  (parameterize ([date-display-format 'iso-8601])
+    (date->string (current-date) #t)))
 
 (define-tool (nop) #:desc "do nothing. call this tool if you don't need to call other tools"
   #t)
