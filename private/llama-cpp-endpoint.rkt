@@ -66,7 +66,8 @@
         [(hash* ['choices (list (hash* ['finish_reason (? string?)]) _ ...)])
          (k)]
         [(hash* ['error _])
-         (error 'chat "~a" j)]))))
+         (error 'chat "~a" j)]
+        [else (void)]))))
 
 (define (call/prefill-workaround messages proc)
   (match messages
