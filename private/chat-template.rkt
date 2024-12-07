@@ -1,7 +1,6 @@
 #lang racket/base
 (require racket/list racket/match racket/sequence racket/string)
-(provide chatml llama3 gemma2 minitron minitron/stop mistral mistral/v7 mistral/v3/tekken
-         current-tools-string)
+(provide chat-template current-tools-string)
 ;;;; mostly for llama.cpp prefill
 
 (define (split-messages messages [merge-system? #t])
@@ -82,18 +81,6 @@
   (fprintf s "<start_of_turn>model\n~a" (prefill-content prefill))
   (get-output-string s))
 
-(define (minitron messages)
-  (define s (open-output-string))
-  (define-values (sys msgs prefill) (split-messages messages #f))
-  (when sys
-    (fprintf s "<extra_id_0>System~%~a~%~%" (hash-ref sys 'content)))
-  (for ([(role content) (in-messages msgs #:user "User" #:assistant "Assistant")])
-    (fprintf s "<extra_id_1>~a~%~a~%" role content))
-  (fprintf s "<extra_id_1>Assistant~%~a" (prefill-content prefill))
-  (get-output-string s))
-
-(define minitron/stop '("<extra_id_1>"))
-
 (define (last-msg msgs)
   (if (null? msgs) #f (last msgs)))
 
@@ -133,3 +120,13 @@
 
 (define (mistral/v3/tekken msgs)
   (mistral/internal msgs #f #t))
+
+(define (chat-template template-name)
+  (match template-name
+    ["chatml" chatml]
+    ["llama3" llama3]
+    ["gemma2" gemma2]
+    ["mistral" mistral]
+    ["mistral/v7" mistral/v7]
+    ["mistral/v3/tekken" mistral/v3/tekken]
+    [else (error "Unknown template name: ~a" template-name)]))
