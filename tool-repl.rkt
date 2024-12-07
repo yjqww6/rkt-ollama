@@ -120,7 +120,8 @@ GBNF
      (define old-trace (current-resp-trace))
      (define (new-trace net)
        (match net
-         [(hash* ['stopping_word "<tool_call>"])
+         [(or (hash* ['stop_type "word"])
+              (hash* ['stopping_word "<tool_call>"]))
           (has-tool #t)]
          [else (void)])
        (old-trace net))
