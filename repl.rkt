@@ -2,7 +2,7 @@
 (require "main.rkt" "private/chat-template.rkt"
          racket/list racket/file racket/class racket/match racket/system racket/port
          racket/lazy-require)
-(provide (all-defined-out) (all-from-out "main.rkt"))
+(provide (all-defined-out) (all-from-out "main.rkt" "private/chat-template.rkt"))
 (define-namespace-anchor here)
 
 (define current-image (make-parameter #f))
