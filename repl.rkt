@@ -146,7 +146,6 @@
            racket/port racket/cmdline racket/runtime-path
            (for-syntax racket/base))
   (define-runtime-module-path-index repl '(submod ".."))
-  (define-runtime-module-path-index llama-cpp "private/llama-cpp-endpoint.rkt")
 
   (define ns (namespace-anchor->empty-namespace here))
   (namespace-require 'racket ns)
@@ -165,7 +164,6 @@
    [("--port") p "ollama port" (current-port (string->number p))]
    [("--llama-cpp") tpl
                     "use llama.cpp chatter with template"
-                    (namespace-require llama-cpp ns)
                     (default-endpoint (cons "localhost" 8080))
                     (current-message-style #f)
                     (case tpl

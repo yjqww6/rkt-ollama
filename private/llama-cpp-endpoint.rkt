@@ -1,8 +1,7 @@
 #lang racket/base
 (require "config.rkt" "common.rkt" "log.rkt" "history.rkt")
 (require racket/string racket/match json)
-(provide current-options current-grammar
-         llama-cpp-chat-endpoint llama-cpp-completion-endpoint)
+(provide llama-cpp-chat-endpoint llama-cpp-completion-endpoint)
 
 (define (build-options)
   (hash-param
