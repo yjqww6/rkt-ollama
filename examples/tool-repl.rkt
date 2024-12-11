@@ -74,7 +74,7 @@
            "\n"))
         ((current-chat) (hasheq 'role (current-tool-role) 'content resp))))))
 
-(define (make-json-gbnf . root)
+(define (make-json-gbnf #:defs [defs #f] . root)
   (define root-string
     (let ([s (open-output-string)])
       (for ([r (in-list root)])
@@ -107,37 +107,41 @@ number ::= ("-"? ([0-9] | [1-9] [0-9]{0,15})) ("." [0-9]+)? ([eE] [-+]? [0-9] [1
 
 # Optional space: by convention, applied in this grammar after literal chars when allowed
 ws ::= | " " | "\n" [ \t]{0,20}
+
 GBNF
-   ))
+   (or defs "")))
+
+(define (make-constrained-completion-endpoint trigger grammar)
+  (define has-tool (make-parameter #f))
+  (define old-trace (current-resp-trace))
+  (define (new-trace net)
+    (match net
+      [(or (hash* ['stop_type "word"])
+           (hash* ['stopping_word (? (λ (s) (string=? s trigger)))]))
+       (has-tool #t)]
+      [else (void)])
+    (old-trace net))
+
+  (define old-completion (current-completion-endpoint))
+  (λ (prompt output)
+    (define p (open-output-string))
+    (parameterize ([has-tool #f])
+      (parameterize ([current-stop (list trigger)]
+                     [current-resp-trace new-trace])
+        (old-completion prompt (combine-output output p)))
+      (when (has-tool)
+        (define new-prompt (string-append prompt (get-output-string p) trigger))
+        (parameterize ([current-grammar grammar])
+          (write-string trigger output)
+          (old-completion new-prompt output))))))
 
 (define (use-nous-tools #:tools [tools default-tools]
                         #:auto? [auto? #f]
                         #:constrained? [constrained? (and (current-chat-template) #t)])
   (reset
    (when constrained?
-     (define has-tool (make-parameter #f))
-     (define old-trace (current-resp-trace))
-     (define (new-trace net)
-       (match net
-         [(or (hash* ['stop_type "word"])
-              (hash* ['stopping_word "<tool_call>"]))
-          (has-tool #t)]
-         [else (void)])
-       (old-trace net))
-
-     (define old-completion (current-completion-endpoint))
-     (define (new-completion prompt output)
-       (define p (open-output-string))
-       (parameterize ([has-tool #f])
-         (parameterize ([current-stop '("<tool_call>")]
-                        [current-resp-trace new-trace])
-           (old-completion prompt (combine-output output p)))
-         (when (has-tool)
-           (define new-prompt (string-append prompt (get-output-string p) "<tool_call>"))
-           (parameterize (#;[current-enforce-json #t]
-                          [current-grammar (make-json-gbnf 'ws 'object "</tool_call>")])
-             (write-string "<tool_call>" output)
-             (old-completion new-prompt output)))))
+     (define new-completion
+       (make-constrained-completion-endpoint "<tool_call>" (make-json-gbnf 'ws 'object "</tool_call>")))
      (shift k (parameterize ([current-completion-endpoint new-completion]) (k))))
   
    (define callback (tools-callback tools))
@@ -230,6 +234,28 @@ GBNF
      (when auto?
        (shift k (parameterize ([current-chat (make-auto-execute-chat)]) (k))))
      (repl))))
+
+(define (use-llama-tools #:tools [tools default-tools]
+                         #:auto? [auto? #f]
+                         #:constrained? [constrained? (and (current-chat-template) #t)])
+  (reset
+   (when constrained?
+     (define new-completion
+       (make-constrained-completion-endpoint
+        "<function="
+        (make-json-gbnf 'name ">" 'ws 'object 'ws "</function>"
+                        #:defs "name ::= [A-Za-z_]+")))
+     (shift k (parameterize ([current-completion-endpoint new-completion]) (k))))
+   (define callback (tools-callback tools))
+   (define exec
+     (make-exec parse-llama-toolcall callback jsexpr->string))
+   (parameterize ([current-messages-preprocessor (make-system-preprocessor (λ (sys) (make-llama-system-template tools sys)))]
+                  [current-execute exec]
+                  [current-repl-prompt tool-repl-prompt])
+     (reset
+      (when auto?
+        (shift k (parameterize ([current-chat (make-auto-execute-chat)]) (k))))
+      (repl)))))
 
 (define (use-ollama-tools #:tools [tools default-tools]
                           #:auto? [auto? #f])

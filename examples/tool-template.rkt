@@ -91,3 +91,49 @@ TPL
       [(hash 'name name 'parameters arguments)
        (list (hasheq 'name name 'arguments arguments))]
       [else #f])))
+
+;;; another llama tools
+
+(define (make-llama-system-template tools system)
+  (format
+   #<<TPL
+You have access to the following functions:
+
+~a
+
+If a you choose to call a function ONLY reply in the following format:
+<{start_tag}={function_name}>{parameters}{end_tag}
+where
+
+start_tag => `<function`
+parameters => a JSON dict with the function argument name as key and function argument value as value.
+end_tag => `</function>`
+
+Here is an example,
+<function=example_function_name>{"example_name": "example_value"}</function>
+
+Reminder:
+- Function calls MUST follow the specified format
+- Required parameters MUST be specified
+- Only call one function at a time
+- Put the entire function call reply on one line
+- Always add your sources when using search results to answer the user query
+
+~a
+TPL
+   (string-join
+    (for/list ([tool (in-list tools)])
+      (match (tool-desc tool)
+        [(hash* ['function (and h (hash* ['name name] ['description desc]))])
+         (format
+          "Use the function '~a' to: ~a\n~a"
+          name desc (jsexpr->string h))]))
+    "\n")
+   (or system "")))
+
+(define (parse-llama-toolcall response)
+  (with-handlers ([exn:fail? (λ (e) #f)])
+    (match (regexp-match #px"<function=(\\w+)>\\s*(.*?)\\s*</function>" response)
+      [(list _ name args)
+       (list (hasheq 'name name 'arguments (string->jsexpr args)))]
+      [else #f])))
