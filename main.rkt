@@ -7,7 +7,8 @@
          current-chat-output-port current-assistant-start current-message-style
          with-cust
          chat completion chat-by-completion
-         use-ollama use-llama-cpp current-chat-template)
+         use-ollama use-llama-cpp current-chat-template
+         current-chat-endpoint current-completion-endpoint)
 
 (define (call-with-cust thunk)
   (let ([cust (make-custodian)])

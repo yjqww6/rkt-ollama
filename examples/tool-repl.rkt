@@ -1,8 +1,7 @@
 #lang racket/base
 (require racket/date racket/string racket/match racket/control json racket/port
-         "private/common.rkt" "tool.rkt" "repl.rkt" "private/chat-template.rkt" "main.rkt"
-         (submod "tool.rkt" template))
-(provide (all-from-out "tool.rkt") (all-defined-out))
+         "../tool.rkt" "../repl.rkt" "tool-template.rkt")
+(provide (all-from-out "../tool.rkt") (all-defined-out))
 
 ;; example tools
 (define-tool (get_current_time) #:desc "get the current time"
