@@ -1,6 +1,13 @@
 #lang racket/base
-(require racket/date racket/string racket/match racket/control json racket/port
-         "../tool.rkt" "../repl.rkt" "tool-template.rkt")
+(require json
+         racket/control
+         racket/date
+         racket/match
+         racket/port
+         racket/string
+         "../repl.rkt"
+         "../tool.rkt"
+         "tool-template.rkt")
 (provide (all-from-out "../tool.rkt") (all-defined-out))
 
 ;; example tools
@@ -58,21 +65,24 @@
 
 (define current-auto-guard (make-parameter #f))
 
-(define (make-exec parse callback make-response #:parse-content? [parse-content? #t])
-  (λ (assistant #:auto? [auto? #f])
-    (let/ec k
-      (define calls (parse (if parse-content? (hash-ref assistant 'content) assistant)))
-      (when (and calls (not (null? calls)))
-        (when auto?
-          (define guard (current-auto-guard))
-          (when (and guard (not (guard calls)))
-            (k)))
-        (define resp
-          (string-join
-           (for/list ([call (in-list calls)])
-             (make-response (callback call)))
-           "\n"))
-        ((current-chat) (hasheq 'role (current-tool-role) 'content resp))))))
+(define ((make-exec parse callback make-response #:parse-content? [parse-content? #t]) assistant
+                                                                                       #:auto?
+                                                                                       [auto? #f])
+  (let/ec k
+          (define calls
+            (parse (if parse-content?
+                       (hash-ref assistant 'content)
+                       assistant)))
+          (when (and calls (not (null? calls)))
+            (when auto?
+              (define guard (current-auto-guard))
+              (when (and guard (not (guard calls)))
+                (k)))
+            (define resp
+              (string-join (for/list ([call (in-list calls)])
+                             (make-response (callback call)))
+                           "\n"))
+            ((current-chat) (hasheq 'role (current-tool-role) 'content resp)))))
 
 (define (make-json-gbnf #:defs [defs #f] . root)
   (define root-string

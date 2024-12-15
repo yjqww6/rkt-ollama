@@ -13,10 +13,9 @@
   (call-with-input-file
       path
     (λ (p)
-      (match (read p)
-        [(hash* ['system s] ['history h])
-         (current-system s)
-         (current-history h)]))))
+      (match-define (hash* ['system s] ['history h]) (read p))
+      (current-system s)
+      (current-history h))))
 
 (define (make-system system)
   (and system (hasheq 'role "system" 'content system)))

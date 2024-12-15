@@ -1,6 +1,11 @@
 #lang racket/base
-(require "config.rkt" "history.rkt" "log.rkt" "common.rkt" "json.rkt"
-         racket/match racket/port)
+(require racket/match
+         racket/port
+         "common.rkt"
+         "config.rkt"
+         "history.rkt"
+         "json.rkt"
+         "log.rkt")
 (provide  generate ollama-chat-endpoint ollama-completion-endpoint
           embeddings list-models)
 
@@ -102,13 +107,15 @@
      'model (current-model)
      'input prompt))
   (define chat-port (send "/api/embed" data))
-  (define j (begin0 (read-json chat-port) (close-input-port chat-port)))
+  (define j (read-json chat-port))
+  (close-input-port chat-port)
   (log-network-trace (network:recv j))
   (hash-ref j 'embeddings))
 
 (define (list-models [detailed? #f])
   (define chat-port (send "/api/tags" #f #:method "GET"))
-  (define j (begin0 (read-json chat-port) (close-input-port chat-port)))
+  (define j (read-json chat-port))
+  (close-input-port chat-port)
   (log-network-trace (network:recv j))
   (define models (hash-ref j 'models))
   (cond

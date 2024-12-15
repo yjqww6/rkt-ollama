@@ -1,7 +1,13 @@
 #lang racket/base
-(require "main.rkt" "private/chat-template.rkt"
-         racket/list racket/file racket/class racket/match racket/system racket/port
-         racket/lazy-require)
+(require racket/class
+         racket/file
+         racket/lazy-require
+         racket/list
+         racket/match
+         racket/port
+         racket/system
+         "main.rkt"
+         "private/chat-template.rkt")
 (provide (all-defined-out) (all-from-out "main.rkt" "private/chat-template.rkt"))
 (define-namespace-anchor here)
 
@@ -89,19 +95,18 @@
      (current-say-command)))
   (f 'wait))
 
-(define (make-say-chat chat)
-  (λ (s)
-    (define-values (in out) (make-pipe))
-    (with-cust _
-      (define thr
-        (thread
-         (λ ()
-           (for ([line (in-lines in)])
-             (say line)))))
-      (parameterize ([current-chat-output-port (combine-output (current-chat-output-port) out)])
-        (chat s)
-        (close-output-port out)
-        (thread-wait thr)))))
+(define ((make-say-chat chat) s)
+  (define-values (in out) (make-pipe))
+  (with-cust _
+             (define thr
+               (thread (λ ()
+                         (for ([line (in-lines in)])
+                           (say line)))))
+             (parameterize ([current-chat-output-port (combine-output (current-chat-output-port)
+                                                                      out)])
+               (chat s)
+               (close-output-port out)
+               (thread-wait thr))))
 
 (define current-output-prefix (make-parameter #f))
 
@@ -128,7 +133,7 @@
   (match (regexp-match #px"^```\n(.*)\n```(.*)$" content)
     [(list _ paste prompt)
      (current-paste-text paste)
-     (when (> (string-length prompt) 0)
+     (when (positive? (string-length prompt))
        (clip prompt))]
     [else (clip content)])
   (current-history history))
@@ -216,7 +221,7 @@
           (λ (cc)
             (newline)
             (display "Accept as history[y/n]:")
-            (when (regexp-match? #px"^\\s*y" (read-line))
+            (when (regexp-match? #px"^\\s*y" (read-line (current-input-port) 'any))
               (cc))))))))
   (define (run-chat s)
     (run (λ () ((current-chat) s))))
@@ -225,65 +230,62 @@
   ;; , starts a racket command
   ;; """ starts multi line block in expeditor without triggering shortcuts
   ;;; ^ starts a output prefix
-  (define (reader orig)
-    (lambda (in)
-      (cond
-        [uploaded!
-         (set! uploaded! #f)
-         (refreshing)]
-        [(eof-object? (peek-byte in)) eof]
-        [(eqv? #\^ (peek-char in))
-         (read-char in)
-         (current-output-prefix (port->string in))
-         (refreshing)]
-        [(eqv? #\$ (peek-char in))
-         (read-char in)
-         (current-system (port->string in))
-         (refreshing)]
-        [(eqv? #\! (peek-char in))
-         (read-char in)
-         (cmd (port->string in))]
-        [(eqv? #\/ (peek-char in))
-         (read-char in)
-         (port->list read in)]
-        [(command-input? in)
-         =>
-         (λ (p)
-           (forward p in)
-           (orig in))]
-        [(multi-input? in)
-         =>
-         (λ (p)
-           (forward p in)
-           (message (car (regexp-split multi-input-end (port->string in)))))]
-        [(multi-line-paste? in)
-         =>
-         (λ (p)
-           (forward p in)
-           (current-paste-text (car (regexp-split multi-input-paste-end (port->string in))))
-           (refreshing))]
-        [else
-         (message (port->string in))])))
+  (define ((reader orig) in)
+    (cond
+      [uploaded!
+       (set! uploaded! #f)
+       (refreshing)]
+      [(eof-object? (peek-byte in)) eof]
+      [(eqv? #\^ (peek-char in))
+       (read-char in)
+       (current-output-prefix (port->string in))
+       (refreshing)]
+      [(eqv? #\$ (peek-char in))
+       (read-char in)
+       (current-system (port->string in))
+       (refreshing)]
+      [(eqv? #\! (peek-char in))
+       (read-char in)
+       (cmd (port->string in))]
+      [(eqv? #\/ (peek-char in))
+       (read-char in)
+       (port->list read in)]
+      [(command-input? in)
+       =>
+       (λ (p)
+         (forward p in)
+         (orig in))]
+      [(multi-input? in)
+       =>
+       (λ (p)
+         (forward p in)
+         (message (car (regexp-split multi-input-end (port->string in)))))]
+      [(multi-line-paste? in)
+       =>
+       (λ (p)
+         (forward p in)
+         (current-paste-text (car (regexp-split multi-input-paste-end (port->string in))))
+         (refreshing))]
+      [else (message (port->string in))]))
 
-  (define (ready orig)
-    (lambda (in)
-      (cond
-        [(command-input? in)
-         =>
-         (λ (p)
-           (forward p in)
-           (orig in))]
-        [(multi-input? in)
-         =>
-         (λ (p)
-           (forward p in)
-           (regexp-match? multi-input-end in))]
-        [(multi-line-paste? in)
-         =>
-         (λ (p)
-           (forward p in)
-           (regexp-match? multi-input-paste-end in))]
-        [else #t])))
+  (define ((ready orig) in)
+    (cond
+      [(command-input? in)
+       =>
+       (λ (p)
+         (forward p in)
+         (orig in))]
+      [(multi-input? in)
+       =>
+       (λ (p)
+         (forward p in)
+         (regexp-match? multi-input-end in))]
+      [(multi-line-paste? in)
+       =>
+       (λ (p)
+         (forward p in)
+         (regexp-match? multi-input-paste-end in))]
+      [else #t]))
 
   (when (terminal-port? (current-input-port))
     (expeditor-configure)
@@ -334,9 +336,9 @@
               (call-with-values
                (λ () (run (λ () (eval v ns))))
                (λ r
-                 (for ([v (in-list r)])
-                   (unless (void? v)
-                     (println v)))))))
+                 (for ([v (in-list r)]
+                       #:unless (void? v))
+                   (println v))))))
            (loop)]))
       (current-repl loop)
       (loop))

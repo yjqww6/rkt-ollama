@@ -1,5 +1,7 @@
 #lang racket/base
-(require racket/class net/base64 racket/file)
+(require net/base64
+         racket/class
+         racket/file)
 (provide get-image)
 
 (define (lazy mod id)
@@ -20,12 +22,8 @@
       (get-output-bytes b)
       "")))
   (cond
-    [(path? img)
-     (bytes->string/latin-1 (base64-encode (file->bytes img) ""))]
-    [(bytes? img)
-     (bytes->string/latin-1 (base64-encode img ""))]
-    [else
-     (cond
-       [(is-a? img (bitmap)) (bitmap->bytes img)]
-       [(is-a? img (image-snip)) (bitmap->bytes (send img get-bitmap))]
-       [else (error 'get-image)])]))
+    [(path? img) (bytes->string/latin-1 (base64-encode (file->bytes img) ""))]
+    [(bytes? img) (bytes->string/latin-1 (base64-encode img ""))]
+    [(is-a? img (bitmap)) (bitmap->bytes img)]
+    [(is-a? img (image-snip)) (bitmap->bytes (send img get-bitmap))]
+    [else (error 'get-image)]))

@@ -21,13 +21,16 @@
       [else
        (printf "~a  ~a tokens~%" case tokens)]))
   (when (current-verbose)
-    (match p
-      [(perf prompt-tokens eval-tokens
-             prompt-duration eval-duration
-             prompt-tokens-per-second eval-tokens-per-second)
-       (newline)
-       (show "PROMPT" prompt-tokens prompt-duration prompt-tokens-per-second)
-       (show "EVAL" eval-tokens eval-duration eval-tokens-per-second)])))
+    (match-define (perf prompt-tokens
+                        eval-tokens
+                        prompt-duration
+                        eval-duration
+                        prompt-tokens-per-second
+                        eval-tokens-per-second)
+      p)
+    (newline)
+    (show "PROMPT" prompt-tokens prompt-duration prompt-tokens-per-second)
+    (show "EVAL" eval-tokens eval-duration eval-tokens-per-second)))
 
 (define current-network-trace (make-parameter void))
 (define current-perf-trace (make-parameter default-perf-trace))

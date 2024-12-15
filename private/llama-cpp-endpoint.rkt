@@ -1,6 +1,11 @@
 #lang racket/base
-(require "config.rkt" "common.rkt" "log.rkt" "history.rkt" "json.rkt")
-(require racket/string racket/match)
+(require "common.rkt"
+         "config.rkt"
+         "history.rkt"
+         "json.rkt"
+         "log.rkt")
+(require racket/match
+         racket/string)
 (provide llama-cpp-chat-endpoint llama-cpp-completion-endpoint)
 
 (define (build-options)
@@ -89,11 +94,11 @@
     (for ([j resp])
       (log-resp-trace j)
       (log-perf j)
-      (match j
-        [(hash* ['content content] ['stop stop])
-         (write-string content output)
-         (flush-output output)
-         (when stop (k))]))))
+      (match-define (hash* ['content content] ['stop stop]) j)
+      (write-string content output)
+      (flush-output output)
+      (when stop
+        (k)))))
 
 (define (completion prompt)
   (define data (hash-set (build-options) 'prompt prompt))

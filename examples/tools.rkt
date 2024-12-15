@@ -1,5 +1,11 @@
 #lang racket/base
-(require racket/system racket/match racket/file racket/date racket/exn db json
+(require db
+         json
+         racket/date
+         racket/exn
+         racket/file
+         racket/match
+         racket/system
          "../tool.rkt")
 (provide (all-defined-out))
 
@@ -50,8 +56,8 @@
       (λ (p)
         (when offset
           (file-position p offset))
-        (define str (let ([v (read-string limit p)])
-                      (if (eof-object? v) "" v)))
+        (define v (read-string limit p))
+        (define str (if (eof-object? v) "" v))
         (define next (file-position p))
         (if (eof-object? (peek-char p))
             (hasheq 'content str 'all #t)
@@ -96,10 +102,8 @@
   (begin-tool
     (define db (get-db))
     (define res (apply query db (prepare db stmt)
-                       (map (λ (arg) (if (eq? (json-null) arg)
-                                         sql-null
-                                         arg))
-                            args)))
+                       (for/list ([arg (in-list args)])
+                         (if (eq? (json-null) arg) sql-null arg))))
     (match res
       [(simple-result (list (cons ks vs) ...))
        (for/hasheq ([k (in-list ks)]

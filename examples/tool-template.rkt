@@ -1,6 +1,8 @@
 #lang racket/base
-(require "../tool.rkt"
-         racket/string racket/match json)
+(require json
+         racket/match
+         racket/string
+         "../tool.rkt")
 (provide (all-defined-out))
 
 (define (make-nous-system-template tools system)
@@ -123,11 +125,9 @@ Reminder:
 TPL
    (string-join
     (for/list ([tool (in-list tools)])
-      (match (tool-desc tool)
-        [(hash* ['function (and h (hash* ['name name] ['description desc]))])
-         (format
-          "Use the function '~a' to: ~a\n~a"
-          name desc (jsexpr->string h))]))
+      (match-define (hash* ['function (and h (hash* ['name name] ['description desc]))])
+        (tool-desc tool))
+      (format "Use the function '~a' to: ~a\n~a" name desc (jsexpr->string h)))
     "\n")
    (or system "")))
 

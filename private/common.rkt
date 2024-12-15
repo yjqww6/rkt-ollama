@@ -1,5 +1,10 @@
 #lang racket/base
-(require racket/port net/http-client "config.rkt" "log.rkt" "history.rkt" "json.rkt")
+(require net/http-client
+         racket/port
+         "config.rkt"
+         "history.rkt"
+         "json.rkt"
+         "log.rkt")
 (provide (all-defined-out))
 
 (struct response (port)
@@ -7,7 +12,7 @@
   (λ (resp)
     (in-port
      (λ (p)
-       (define l (read-line p))
+       (define l (read-line p 'any))
        (cond
          [(eof-object? l) l]
          [else

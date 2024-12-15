@@ -1,8 +1,13 @@
 #lang racket/base
-(require "private/config.rkt" "private/history.rkt" "private/image.rkt" "private/log.rkt"
-         "private/common.rkt" "private/json.rkt"
+(require racket/match
+         racket/string
          syntax/parse/define
-         racket/string racket/match)
+         "private/common.rkt"
+         "private/config.rkt"
+         "private/history.rkt"
+         "private/image.rkt"
+         "private/json.rkt"
+         "private/log.rkt")
 (provide (all-from-out "private/config.rkt" "private/history.rkt" "private/log.rkt" "private/json.rkt")
          current-chat-output-port current-assistant-start current-message-style
          with-cust
@@ -11,13 +16,12 @@
          current-chat-endpoint current-completion-endpoint)
 
 (define (call-with-cust thunk)
-  (let ([cust (make-custodian)])
-    (dynamic-wind
-     void
-     (λ ()
-       (parameterize ([current-custodian cust])
-         (thunk cust)))
-     (λ () (custodian-shutdown-all cust)))))
+  (define cust (make-custodian))
+  (dynamic-wind void
+                (λ ()
+                  (parameterize ([current-custodian cust])
+                    (thunk cust)))
+                (λ () (custodian-shutdown-all cust))))
 
 (define-syntax-parse-rule (with-cust C:id Body:expr ...+)
   (call-with-cust (λ (C) Body ...)))

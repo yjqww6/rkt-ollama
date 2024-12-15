@@ -1,6 +1,9 @@
 #lang racket/base
-(require racket/string racket/match "private/json.rkt"
-         syntax/parse/define (for-syntax racket/base))
+(require (for-syntax racket/base)
+         racket/match
+         racket/string
+         syntax/parse/define
+         "private/json.rkt")
 (provide define-tool tools-callback tool->string tools->string tool-name (struct-out tool))
 
 (struct tool (proc desc) #:property prop:procedure (struct-field-index proc))

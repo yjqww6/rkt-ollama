@@ -1,5 +1,7 @@
 #lang racket/base
-(require json racket/symbol racket/match)
+(require json
+         racket/match
+         racket/symbol)
 (provide (struct-out inlined-json)
          make-obj obj-ref djson->string djson->bytes write-djson
          string->jsexpr read-json
