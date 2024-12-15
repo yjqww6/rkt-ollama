@@ -1,6 +1,6 @@
 #lang racket/base
-(require "config.rkt" "history.rkt" "log.rkt" "common.rkt"
-         racket/match racket/port json)
+(require "config.rkt" "history.rkt" "log.rkt" "common.rkt" "json.rkt"
+         racket/match racket/port)
 (provide  generate ollama-chat-endpoint ollama-completion-endpoint
           embeddings list-models)
 

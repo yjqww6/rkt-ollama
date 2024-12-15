@@ -193,6 +193,8 @@ GBNF
              (define tools-string (tools->string new-tools))
              (parameterize ([current-tools-string tools-string]
                             [current-output-prefix "[TOOL_CALLS]"]
+                            ;only good for tekken without allowing prefix spaces
+                            #;[current-json-schema (example->schema (list (make-obj 'name "name" 'arguments (hasheq))))]
                             [current-grammar (make-json-gbnf 'ws "[" 'object "]")])
                (proc)))))
         (shift k (parameterize ([current-chat always-chat]) (k)))]
@@ -224,7 +226,8 @@ GBNF
            (λ (new-tools proc)
              (parameterize ([current-messages-preprocessor
                              (make-last-user-preprocessor (λ (user) (make-llama3-prompt new-tools user)))]
-                            [current-enforce-json #t])
+                            [current-enforce-json #t]
+                            [current-json-schema (example->schema (make-obj 'name "name" 'parameters (hasheq)))])
                (proc)))))
         (shift k (parameterize ([current-chat always-chat]) (k)))]
        [else

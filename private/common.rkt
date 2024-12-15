@@ -1,5 +1,5 @@
 #lang racket/base
-(require racket/port racket/match json net/http-client "config.rkt" "log.rkt" "history.rkt")
+(require racket/port net/http-client "config.rkt" "log.rkt" "history.rkt" "json.rkt")
 (provide (all-defined-out))
 
 (struct response (port)
@@ -25,7 +25,7 @@
     [(response-port resp) => close-input-port]))
 
 (define (send path j #:method [method "POST"])
-  (define data (and j (jsexpr->bytes j)))
+  (define data (and j (djson->bytes j)))
   (when data
     (log-network-trace (network:send data)))
   (define-values (status headers port)
