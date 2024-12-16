@@ -4,7 +4,7 @@
          racket/string
          syntax/parse/define
          "private/json.rkt")
-(provide define-tool tools-callback tool->string tools->string tool-name (struct-out tool))
+(provide define-tool tools-callback tool->string tools->string tool-name (struct-out tool) obj djson->string)
 
 (struct tool (proc desc) #:property prop:procedure (struct-field-index proc))
 

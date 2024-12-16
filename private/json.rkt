@@ -1,11 +1,13 @@
 #lang racket/base
 (require json
          racket/match
-         racket/symbol)
+         racket/symbol
+         (for-syntax racket/base syntax/parse))
 (provide (struct-out inlined-json)
          make-obj obj-ref djson->string djson->bytes write-djson
          string->jsexpr read-json
-         example->schema)
+         example->schema
+         obj)
 
 (struct inlined-json (data) #:transparent)
 (struct ordered-obj (assocs) #:transparent)
@@ -16,6 +18,13 @@
      (match args
        [(list* k v args) (cons (cons k v) (loop args))]
        ['() '()]))))
+
+(define-match-expander obj
+  (λ (stx)
+    (syntax-parse stx
+      [(_ (~seq K V) ...)
+       #'(ordered-obj (and (app (λ (x) (assq K x)) (cons _ V))
+                           ...))])))
 
 (define (obj-ref obj k [fail (λ () #f)])
   (define p (assq k (ordered-obj-assocs obj)))

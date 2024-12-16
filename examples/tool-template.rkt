@@ -125,9 +125,9 @@ Reminder:
 TPL
    (string-join
     (for/list ([tool (in-list tools)])
-      (match-define (hash* ['function (and h (hash* ['name name] ['description desc]))])
+      (match-define (obj 'function (and h (obj 'name name 'description desc)))
         (tool-desc tool))
-      (format "Use the function '~a' to: ~a\n~a" name desc (jsexpr->string h)))
+      (format "Use the function '~a' to: ~a\n~a" name desc (djson->string h)))
     "\n")
    (or system "")))
 
