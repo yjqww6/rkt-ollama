@@ -79,6 +79,7 @@
                  [current-image (current-image)]
                  [current-num-predict 0]
                  [current-output-port (open-output-nowhere)]
+                 [current-history (current-history)]
                  [current-chat-output-port #f])
     ((current-chat) "")))
 
