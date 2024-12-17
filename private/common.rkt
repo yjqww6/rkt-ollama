@@ -105,3 +105,9 @@
 
 (define (completion/output prompt output)
   ((current-completion-endpoint) prompt output))
+
+(define current-tokenize-endpoint
+  (make-parameter (make-parameter (λ (prompt) (error 'tokenize "no endpoint")))))
+
+(define (tokenize prompt)
+  ((current-tokenize-endpoint) prompt))

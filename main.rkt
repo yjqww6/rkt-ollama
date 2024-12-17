@@ -11,7 +11,7 @@
 (provide (all-from-out "private/config.rkt" "private/history.rkt" "private/log.rkt" "private/json.rkt")
          current-chat-output-port current-assistant-start current-message-style
          with-cust
-         chat completion chat-by-completion
+         chat completion chat-by-completion count-tokens
          use-ollama use-llama-cpp current-chat-template
          current-chat-endpoint current-completion-endpoint)
 
@@ -93,6 +93,10 @@
                                  #:assistant-start fake)
       (void)))
 
+(define (count-tokens prompt)
+  (with-cust _
+    (length (tokenize prompt))))
+
 (define (use-ollama)
   (local-require "private/main.rkt")
   (current-chat-endpoint ollama-chat-endpoint)
@@ -101,4 +105,5 @@
 (define (use-llama-cpp)
   (local-require "private/llama-cpp-endpoint.rkt")
   (current-chat-endpoint llama-cpp-chat-endpoint)
-  (current-completion-endpoint llama-cpp-completion-endpoint))
+  (current-completion-endpoint llama-cpp-completion-endpoint)
+  (current-tokenize-endpoint llama-cpp-tokenize-endpoint))

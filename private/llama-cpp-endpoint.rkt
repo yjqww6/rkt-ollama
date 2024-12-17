@@ -6,7 +6,7 @@
          "log.rkt")
 (require racket/match
          racket/string)
-(provide llama-cpp-chat-endpoint llama-cpp-completion-endpoint)
+(provide llama-cpp-chat-endpoint llama-cpp-completion-endpoint llama-cpp-tokenize-endpoint)
 
 (define (build-options)
   (hash-param
@@ -109,3 +109,9 @@
   (define resp (completion prompt))
   (handle-completion-response resp output)
   (close-response resp))
+
+(define (llama-cpp-tokenize-endpoint prompt)
+  (define p (send "/tokenize" (hasheq 'content prompt)))
+  (define result (read-json p))
+  (close-input-port p)
+  (hash-ref result 'tokens))
