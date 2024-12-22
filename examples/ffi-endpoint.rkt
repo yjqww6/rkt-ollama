@@ -21,13 +21,13 @@
      [main_gpu _int32]
      [tensor_split _pointer]
      [rpc_servers _string]
-     [progress_callback (_fun _float _pointer -> _bool)]
+     [progress_callback (_fun _float _pointer -> _stdbool)]
      [progress_callback_user_data _pointer]
      [kv_overrides _pointer]
-     [vocab_only _bool]
-     [use_mmap _bool]
-     [use_mlock _bool]
-     [check_tensors _bool]))
+     [vocab_only _stdbool]
+     [use_mmap _stdbool]
+     [use_mlock _stdbool]
+     [check_tensors _stdbool]))
 
   (define-cstruct _llama_context_params
     ([n_ctx _uint32]
@@ -51,12 +51,12 @@
      [cb_eval_user_data _pointer]
      [type_k _int32]
      [type_v _int32]
-     [logits_all _bool]
-     [embeddings _bool]
-     [offload_kqv _bool]
-     [flash_attn _bool]
-     [no_perf _bool]
-     [abort_callback (_fun _pointer -> _bool)]
+     [logits_all _stdbool]
+     [embeddings _stdbool]
+     [offload_kqv _stdbool]
+     [flash_attn _stdbool]
+     [no_perf _stdbool]
+     [abort_callback (_fun _pointer -> _stdbool)]
      [abort_callback_data _pointer]))
 
   (define-cstruct _llama_model_quantize_params
@@ -64,11 +64,11 @@
      [ftype _int32]
      [output_tensor_type _int32]
      [token_embedding_type _int32]
-     [allow_requantize _bool]
-     [quantize_output_tensor _bool]
-     [only_copy _bool]
-     [pure _bool]
-     [keep_split _bool]
+     [allow_requantize _stdbool]
+     [quantize_output_tensor _stdbool]
+     [only_copy _stdbool]
+     [pure _stdbool]
+     [keep_split _stdbool]
      [imatrix _pointer]
      [kv_overrides _pointer]))
 
@@ -77,7 +77,7 @@
      [bias _float]))
 
   (define-cstruct _llama_sampler_chain_params
-    ([no_perf _bool]))
+    ([no_perf _stdbool]))
 
   (define-cstruct _llama_chat_message
     ([role _string]
@@ -92,7 +92,7 @@
     ([data _pointer]
      [size _size]
      [selected _int64]
-     [sorted _bool]))
+     [sorted _stdbool]))
 
   (define-cstruct _llama_batch
     ([n_tokens _int32]
@@ -112,8 +112,8 @@
   (define-llama llama_new_context_with_model (_fun _pointer _llama_context_params -> _pointer))
   (define-llama llama_free (_fun _pointer -> _void))
   (define-llama llama_time_us (_fun -> _int64))
-  (define-llama llama_tokenize (_fun _pointer _bytes _int32 _pointer _int32 _bool _bool -> _int32))
-  (define-llama llama_token_to_piece (_fun _pointer _llama_token _bytes _int32 _int32 _bool -> _int32))
+  (define-llama llama_tokenize (_fun _pointer _bytes _int32 _pointer _int32 _stdbool _stdbool -> _int32))
+  (define-llama llama_token_to_piece (_fun _pointer _llama_token _bytes _int32 _int32 _stdbool -> _int32))
   (define-llama llama_token_bos (_fun _pointer -> _llama_token))
   ;(define-llama llama_batch_get_one (_fun _pointer _int32 -> _llama_batch))
   (define-llama llama_decode (_fun _pointer _llama_batch -> _int32))
@@ -127,13 +127,13 @@
   (define-llama llama_sampler_sample (_fun _pointer _pointer _int32 -> _llama_token))
   (define-llama llama_sampler_free (_fun _pointer -> _void))
   (define-llama llama_get_model (_fun _pointer -> _pointer))
-  (define-llama llama_model_has_encoder (_fun _pointer -> _bool))
-  (define-llama llama_model_has_decoder (_fun _pointer -> _bool))
+  (define-llama llama_model_has_encoder (_fun _pointer -> _stdbool))
+  (define-llama llama_model_has_decoder (_fun _pointer -> _stdbool))
   (define-llama llama_model_decoder_start_token (_fun _pointer -> _llama_token))
-  (define-llama llama_model_is_recurrent (_fun _pointer -> _bool))
-  (define-llama llama_token_is_eog (_fun _pointer _llama_token -> _bool))
+  (define-llama llama_model_is_recurrent (_fun _pointer -> _stdbool))
+  (define-llama llama_token_is_eog (_fun _pointer _llama_token -> _stdbool))
   (define-llama llama_kv_cache_clear (_fun _pointer -> _void))
-  (define-llama llama_kv_cache_seq_rm (_fun _pointer _llama_seq_id _llama_pos _llama_pos -> _bool))
+  (define-llama llama_kv_cache_seq_rm (_fun _pointer _llama_seq_id _llama_pos _llama_pos -> _stdbool))
   (define-llama llama_n_ctx (_fun _pointer -> _uint32))
   )
 
@@ -163,6 +163,7 @@
   (define ctx-params (llama_context_default_params))
   (set-llama_context_params-n_ctx! ctx-params n-context)
   (set-llama_context_params-n_batch! ctx-params n-batch)
+  (set-llama_context_params-flash_attn! ctx-params #t)
   (set-llama_context_params-no_perf! ctx-params #f)
   (define ctx (llama_new_context_with_model model ctx-params))
   (unless ctx
