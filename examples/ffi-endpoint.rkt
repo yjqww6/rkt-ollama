@@ -96,7 +96,8 @@
 
   (define-cstruct _llama_batch
     ([n_tokens _int32]
-     [token _pointer]
+     ;[token _pointer]
+     [token _gcpointer]
      [embd _pointer]
      [pos _pointer]
      [n_seq_id _pointer]
