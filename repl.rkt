@@ -217,7 +217,7 @@
      (λ ()
        (parameterize ([running? #t])
          (call-with-continuation-prompt
-          thunk
+          (λ () (begin0 (thunk) (when (break-enabled) (break-enabled #t))))
           break-prompt-tag
           (λ (cc)
             (newline)
