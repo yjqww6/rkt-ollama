@@ -2,7 +2,8 @@
 
 (module llama-cpp racket/base
   (require ffi/unsafe
-           ffi/unsafe/define)
+           ffi/unsafe/define
+           ffi/unsafe/cvector)
   (provide (all-defined-out))
 
   (define-ffi-definer define-llama (ffi-lib "libllama"))
@@ -114,7 +115,7 @@
   (define-llama llama_tokenize (_fun _pointer _bytes _int32 _pointer _int32 _bool _bool -> _int32))
   (define-llama llama_token_to_piece (_fun _pointer _llama_token _bytes _int32 _int32 _bool -> _int32))
   (define-llama llama_token_bos (_fun _pointer -> _llama_token))
-  (define-llama llama_batch_get_one (_fun _pointer _int32 -> _llama_batch))
+  ;(define-llama llama_batch_get_one (_fun _pointer _int32 -> _llama_batch))
   (define-llama llama_decode (_fun _pointer _llama_batch -> _int32))
   (define-llama llama_sampler_chain_init (_fun _llama_sampler_chain_params -> _pointer))
   (define-llama llama_sampler_chain_add (_fun _pointer _pointer -> _void))
@@ -214,8 +215,8 @@
          [(> (+ i n) (bytes-length prompt-bytes))
           (tokenize model prompt-bytes)]
          [(for/and ([a (in-bytes prompt-bytes i)]
-                      [i (in-range n)])
-              (eq? a (bytes-ref buf i)))
+                    [i (in-range n)])
+            (eq? a (bytes-ref buf i)))
           (loop (+ i n) (+ c 1))]
          [else
           (tokenize model prompt-bytes)])])))
@@ -262,20 +263,18 @@
   (define cvec (make-cvector _llama_token 1))
 
   (define (decode cvec off n)
-    (start-atomic)
-    (define batch (llama_batch_get_one (ptr-add (cvector-ptr cvec) off _llama_token) n))
+    (define batch (make-llama_batch n (ptr-add (cvector-ptr cvec) off _llama_token) #f #f #f #f #f))
+    ;(define batch (llama_batch_get_one (ptr-add (cvector-ptr cvec) off _llama_token) n))
     (define r (llama_decode ctx batch))
-    (when (zero? r)
-      (for ([i (in-range n)])
-        (gvector-add! cache (cvector-ref cvec (+ off i)))))
-    (end-atomic)
     (unless (zero? r)
-      (error 'completion "failed to eval")))
+      (error 'completion "failed to eval"))
+    (for ([i (in-range n)])
+      (gvector-add! cache (cvector-ref cvec (+ off i)))))
   (define (event)
     ;; TODO better way to clear ticks
     (for ([i (in-range 10000)])
       (void)))
-  
+    
   (define prompt-bytes (string->bytes/utf-8 prompt))
   (match-define (cons prompt-tokens n-prompt) (tokenize/cache model prompt-bytes cache buf))
   (when (> n-prompt max-ctx)
