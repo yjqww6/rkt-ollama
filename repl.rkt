@@ -99,15 +99,15 @@
 (define ((make-say-chat chat) s)
   (define-values (in out) (make-pipe))
   (with-cust _
-             (define thr
-               (thread (λ ()
-                         (for ([line (in-lines in)])
-                           (say line)))))
-             (parameterize ([current-chat-output-port (combine-output (current-chat-output-port)
-                                                                      out)])
-               (chat s)
-               (close-output-port out)
-               (thread-wait thr))))
+    (define thr
+      (thread (λ ()
+                (for ([line (in-lines in)])
+                  (say line)))))
+    (parameterize ([current-chat-output-port (combine-output (current-chat-output-port)
+                                                             out)])
+      (chat s)
+      (close-output-port out)
+      (thread-wait thr))))
 
 (define current-output-prefix (make-parameter #f))
 
@@ -213,17 +213,21 @@
   (define running? (make-parameter #f))
 
   (define (run thunk)
-    (call-with-continuation-prompt
-     (λ ()
-       (parameterize ([running? #t])
-         (call-with-continuation-prompt
-          (λ () (begin0 (thunk) (when (break-enabled) (break-enabled #t))))
-          break-prompt-tag
-          (λ (cc)
-            (newline)
-            (display "Accept as history[y/n]:")
-            (when (regexp-match? #px"^\\s*y" (read-line (current-input-port) 'any))
-              (cc))))))))
+    (parameterize-break
+     #f
+     (call-with-continuation-prompt
+      (λ ()
+        (parameterize ([running? #t])
+          (parameterize-break
+           #t
+           (call-with-continuation-prompt
+            thunk
+            break-prompt-tag
+            (λ (cc)
+              (newline)
+              (display "Accept as history[y/n]:")
+              (when (regexp-match? #px"^\\s*y" (read-line (current-input-port) 'any))
+                (cc))))))))))
   (define (run-chat s)
     (run (λ () ((current-chat) s))))
 
