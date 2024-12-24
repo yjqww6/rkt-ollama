@@ -125,8 +125,10 @@
   (define-llama llama_sampler_init_top_k (_fun _int32 -> _pointer))
   (define-llama llama_sampler_init_min_p (_fun _float _size -> _pointer))
   (define-llama llama_sampler_init_temp (_fun _float -> _pointer))
+  (define-llama llama_sampler_init_grammar (_fun _pointer _bytes/nul-terminated _bytes/nul-terminated -> _pointer))
   (define-llama llama_sampler_sample (_fun _pointer _pointer _int32 -> _llama_token))
   (define-llama llama_sampler_free (_fun _pointer -> _void))
+  (define-llama llama_sampler_accept (_fun _pointer _llama_token -> _void))
   (define-llama llama_get_model (_fun _pointer -> _pointer))
   (define-llama llama_model_has_encoder (_fun _pointer -> _stdbool))
   (define-llama llama_model_has_decoder (_fun _pointer -> _stdbool))
@@ -140,20 +142,32 @@
 
 (require 'llama-cpp
          racket/match
+         racket/control
          ffi/unsafe
          ffi/unsafe/cvector
          ffi/unsafe/atomic
+         ffi/unsafe/alloc
          data/gvector)
 (provide init-model! completion)
 
-(struct model-context (model context sampler cache))
+(struct model-context (model context cache))
 
 (define n-batch 2048)
 
-(define (default-sampler)
+(define alloc-sampler
+  ((allocator llama_sampler_free) llama_sampler_chain_init))
+
+(define free-sampler
+  ((deallocator) llama_sampler_free))
+
+(define (make-sampler model grammar)
   (define sparams (llama_sampler_chain_default_params))
   (set-llama_sampler_chain_params-no_perf! sparams #f)
-  (define smpl (llama_sampler_chain_init sparams))
+  (define smpl (alloc-sampler sparams))
+  (when grammar
+    (llama_sampler_chain_add
+     smpl
+     (llama_sampler_init_grammar model (string->bytes/utf-8 grammar) #"root")))
   (llama_sampler_chain_add smpl (llama_sampler_init_top_k 40))
   (llama_sampler_chain_add smpl (llama_sampler_init_min_p 0.05 1))
   (llama_sampler_chain_add smpl (llama_sampler_init_temp 0.8))
@@ -180,8 +194,7 @@
     (error 'main "unable to load model"))
 
   (define ctx (make-context model context))
-  (define smpl (default-sampler))
-  (model-context model ctx smpl (make-gvector #:capacity context)))
+  (model-context model ctx (make-gvector #:capacity context)))
 
 (llama_backend_init)
 
@@ -255,14 +268,19 @@
       (loop)))
   diff)
 
-(define (completion mc prompt output #:n-predict [n-predict 256] #:perf [perf #f])
-  (define begin-time (current-inexact-monotonic-milliseconds))
+(define (completion mc prompt output
+                    #:n-predict [n-predict 256]
+                    #:perf [perf #f]
+                    #:grammar [grammar #f])
 
-  (match-define (model-context model ctx smpl cache) mc)
+  (match-define (model-context model ctx cache) mc)
   (define max-ctx (llama_n_ctx ctx))
 
   (define buf (make-bytes 128))
   (define cvec (make-cvector _llama_token 1))
+
+  (define smpl (make-sampler model grammar))
+  (define begin-time (current-inexact-monotonic-milliseconds))
 
   (define (decode cvec off n)
     (define batch (make-llama_batch n (ptr-add (cvector-ptr cvec) off _llama_token) #f #f #f #f #f))
@@ -297,22 +315,33 @@
 
   (define decode-time (current-inexact-monotonic-milliseconds))
 
+  (define callback? (procedure? output))
+
   (define n-decode
     (let loop ([token-id init-token-id] [n-decode 1])
       (cond
-        [(llama_token_is_eog model token-id) n-decode]
+        [(llama_token_is_eog model token-id)
+         n-decode]
         [else
          (define n (detoken model token-id buf))
-         (write-bytes buf output 0 n)
-         (flush-output output)
+         (define finish?
+           (cond
+             [callback? (output buf n)]
+             [else
+              (write-bytes buf output 0 n)
+              (flush-output output)
+              #f]))
          (event)
          (cond
+           [finish? n-decode]
            [(and (< (+ n-prompt n-decode) max-ctx)
                  (or (not n-predict) (<= n-decode n-predict)))
             (cvector-set! cvec 0 token-id)
             (decode cvec 0 1)
             (loop (llama_sampler_sample smpl ctx -1) (+ n-decode 1))]
            [else n-decode])])))
+  (when callback? (output buf 0))
+  (free-sampler smpl)
   
   (define end-time (current-inexact-monotonic-milliseconds))
   (when perf
