@@ -130,7 +130,7 @@
 
 (define (use-prompt-cache! tokens n cache context)
   (define count (gvector-count cache))
-  (define diff0
+  (define diff
     (let loop ([i 0])
       (cond
         [(and (< i n) (< i count))
@@ -140,7 +140,6 @@
            [(= token c-token) (loop (+ i 1))]
            [else i])]
         [else i])))
-  (define diff (max (if (= diff0 n) (- diff0 1) diff0) 0))
   (llama_kv_cache_seq_rm context 0 diff -1)
   (let loop ()
     (when (> (gvector-count cache) diff)
@@ -183,15 +182,18 @@
   (define off (use-prompt-cache! prompt-tokens n-prompt cache ctx))
   (define prompt-time (current-inexact-monotonic-milliseconds))
   (define init-token-id
-    (let loop ([off off])
-      (cond
-        [(>= (+ off n-batch) n-prompt)
-         (decode prompt-tokens off (- n-prompt off))
-         (llama_sampler_sample smpl ctx -1)]
-        [else
-         (decode prompt-tokens off n-batch)
-         (event)
-         (loop (+ off n-batch))])))
+    (cond
+      [(= off n-prompt) (llama_sampler_sample smpl ctx -1)]
+      [else
+       (let loop ([off off])
+         (cond
+           [(>= (+ off n-batch) n-prompt)
+            (decode prompt-tokens off (- n-prompt off))
+            (llama_sampler_sample smpl ctx -1)]
+           [else
+            (decode prompt-tokens off n-batch)
+            (event)
+            (loop (+ off n-batch))]))]))
 
   (define decode-time (current-inexact-monotonic-milliseconds))
 
