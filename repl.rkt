@@ -147,6 +147,16 @@
    ">>>"))
 (define current-repl-prompt (make-parameter default-repl-prompt))
 
+(define (use-llama-cpp-endpoint tpl)
+  (default-endpoint (cons "localhost" 8080))
+  (current-message-style #f)
+  (case tpl
+    [("oai" "openai") (current-chat (make-default-chat chat))]
+    [else
+     (current-chat-template (chat-template tpl))
+     (current-chat (make-default-chat chat-by-completion))])
+  (use-llama-cpp))
+
 (module+ main
   (require expeditor (submod expeditor configure)
            racket/port racket/cmdline racket/runtime-path
@@ -170,14 +180,7 @@
    [("--port") p "ollama port" (current-port (string->number p))]
    [("--llama-cpp") tpl
                     "use llama.cpp chatter with template"
-                    (default-endpoint (cons "localhost" 8080))
-                    (current-message-style #f)
-                    (case tpl
-                      [("oai" "openai") (current-chat (make-default-chat chat))]
-                      [else
-                       (current-chat-template (chat-template tpl))
-                       (current-chat (make-default-chat chat-by-completion))])
-                    (use-llama-cpp)]
+                    (use-llama-cpp-endpoint tpl)]
    #:multi
    [("-r" "--require") file "required file" (namespace-require file ns)]
    [("-e" "--expr") expr "expression" (eval (read (open-input-string expr)) ns)])
