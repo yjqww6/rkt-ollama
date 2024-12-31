@@ -150,7 +150,8 @@
 (define (completion mc prompt output
                     #:n-predict [n-predict 256]
                     #:perf [perf #f]
-                    #:grammar [grammar #f])
+                    #:grammar [grammar #f]
+                    #:progress [progress #f])
 
   (match-define (model-context model ctx cache) mc)
   (define max-ctx (llama_n_ctx ctx))
@@ -181,6 +182,8 @@
 
   (define off (use-prompt-cache! prompt-tokens n-prompt cache ctx))
   (define prompt-time (current-inexact-monotonic-milliseconds))
+  (when progress
+    (progress off n-prompt 'begin))
   (define init-token-id
     (cond
       [(= off n-prompt) (llama_sampler_sample smpl ctx -1)]
@@ -192,8 +195,12 @@
             (llama_sampler_sample smpl ctx -1)]
            [else
             (decode prompt-tokens off n-batch)
+            (when progress
+              (progress (+ off n-batch) n-prompt 'progress))
             (event)
             (loop (+ off n-batch))]))]))
+  (when progress
+    (progress n-prompt n-prompt 'end))
 
   (define decode-time (current-inexact-monotonic-milliseconds))
 

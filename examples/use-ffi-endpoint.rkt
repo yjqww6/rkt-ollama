@@ -72,4 +72,9 @@
                  #:perf (λ (p pp ppt tg tgt)
                           (log-perf-trace (perf p tg (/ ppt 1000) (/ tgt 1000)
                                                 (/ pp (/ ppt 1000)) (/ tg (/ tgt 1000)))))
-                 #:grammar (current-grammar)))))
+                 #:grammar (current-grammar)
+                 #:progress (and (current-verbose)
+                                 (let ([t (current-inexact-monotonic-milliseconds)])
+                                   (λ (off n kind)
+                                     (printf "~a\t/~a\t ~a\t~ams~%"
+                                             off n kind (- (current-inexact-monotonic-milliseconds) t)))))))))
