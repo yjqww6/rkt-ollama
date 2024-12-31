@@ -58,23 +58,33 @@
        (set! pos 0)
        #f])))
 
+(define current-model-context (make-parameter #f))
+
+(define ((ffi-endpoint completion mc) prompt output)
+  (define stop (current-stop))
+  (completion mc
+              prompt (cond
+                       [(or (not stop) (null? stop)) output]
+                       [else (make-stop-flusher output stop)])
+              #:n-predict (current-num-predict)
+              #:perf (λ (p pp ppt tg tgt)
+                       (log-perf-trace (perf p tg (/ ppt 1000) (/ tgt 1000)
+                                             (/ pp (/ ppt 1000)) (/ tg (/ tgt 1000)))))
+              #:grammar (current-grammar)
+              #:progress (and (current-verbose)
+                              (let ([t (current-inexact-monotonic-milliseconds)])
+                                (λ (off n kind)
+                                  (printf "~a\t/~a\t ~a\t~ams~%"
+                                          off n kind (- (current-inexact-monotonic-milliseconds) t)))))))
+
 (define (use-ffi-endpoint model ctx)
   (define init-model! (dynamic-require 'rkt-ollama/examples/ffi-endpoint 'init-model!))
   (define completion (dynamic-require 'rkt-ollama/examples/ffi-endpoint 'completion))
+  (define old-mc (current-model-context))
+  (when old-mc
+    (define free (dynamic-require 'rkt-ollama/examples/ffi-endpoint 'free-model-context))
+    (free old-mc)
+    (current-model-context #f))
   (define mc (init-model! #:path model #:context ctx))
-  (current-completion-endpoint
-   (λ (prompt output)
-     (define stop (current-stop))
-     (completion mc prompt (cond
-                             [(or (not stop) (null? stop)) output]
-                             [else (make-stop-flusher output stop)])
-                 #:n-predict (current-num-predict)
-                 #:perf (λ (p pp ppt tg tgt)
-                          (log-perf-trace (perf p tg (/ ppt 1000) (/ tgt 1000)
-                                                (/ pp (/ ppt 1000)) (/ tg (/ tgt 1000)))))
-                 #:grammar (current-grammar)
-                 #:progress (and (current-verbose)
-                                 (let ([t (current-inexact-monotonic-milliseconds)])
-                                   (λ (off n kind)
-                                     (printf "~a\t/~a\t ~a\t~ams~%"
-                                             off n kind (- (current-inexact-monotonic-milliseconds) t)))))))))
+  (current-model-context mc)
+  (current-completion-endpoint (ffi-endpoint completion mc)))

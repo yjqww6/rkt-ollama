@@ -7,9 +7,15 @@
          ffi/unsafe/atomic
          ffi/unsafe/alloc
          data/gvector)
-(provide init-model! completion)
+(provide init-model! completion free-model-context)
 
 (struct model-context (model context cache))
+
+(define (free-model-context mc)
+  (match-define (model-context model context _) mc)
+  (llama_free context)
+  (llama_free_model model)
+  (void))
 
 (define n-batch 2048)
 
