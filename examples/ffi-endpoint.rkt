@@ -136,7 +136,7 @@
 
 (define (use-prompt-cache! tokens n cache context)
   (define count (gvector-count cache))
-  (define diff
+  (define diff0
     (let loop ([i 0])
       (cond
         [(and (< i n) (< i count))
@@ -146,6 +146,7 @@
            [(= token c-token) (loop (+ i 1))]
            [else i])]
         [else i])))
+  (define diff (max (if (= diff0 n) (- diff0 1) diff0) 0))
   (llama_kv_cache_seq_rm context 0 diff -1)
   (let loop ()
     (when (> (gvector-count cache) diff)
@@ -191,20 +192,15 @@
   (when progress
     (progress off n-prompt 'begin))
   (define init-token-id
-    (cond
-      [(= off n-prompt) (llama_sampler_sample smpl ctx -1)]
-      [else
-       (let loop ([off off])
-         (cond
-           [(>= (+ off n-batch) n-prompt)
-            (decode prompt-tokens off (- n-prompt off))
-            (llama_sampler_sample smpl ctx -1)]
-           [else
-            (decode prompt-tokens off n-batch)
-            (when progress
-              (progress (+ off n-batch) n-prompt 'progress))
-            (event)
-            (loop (+ off n-batch))]))]))
+    (let loop ([off off])
+      (cond
+        [(>= (+ off n-batch) n-prompt)
+         (decode prompt-tokens off (- n-prompt off))
+         (llama_sampler_sample smpl ctx -1)]
+        [else
+         (decode prompt-tokens off n-batch)
+         (event)
+         (loop (+ off n-batch))])))
   (when progress
     (progress n-prompt n-prompt 'end))
 
