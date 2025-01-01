@@ -205,6 +205,8 @@
          (llama_sampler_sample smpl ctx -1)]
         [else
          (decode prompt-tokens off n-batch)
+         (when progress
+           (progress off n-prompt 'step))
          (event)
          (loop (+ off n-batch))])))
   (when progress
