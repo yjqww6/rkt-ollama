@@ -60,18 +60,21 @@
              (+ sum (exp (- f logit))))))
   id)
 
-(define (make-context model n-context)
+(define (make-context model n-context #:kvcache-quant? [kvcache-quant? #f])
   (define ctx-params (llama_context_default_params))
   (set-llama_context_params-n_ctx! ctx-params n-context)
   (set-llama_context_params-n_batch! ctx-params n-batch)
   (set-llama_context_params-flash_attn! ctx-params #t)
   (set-llama_context_params-no_perf! ctx-params #f)
+  (when kvcache-quant?
+    (set-llama_context_params-type_k! ctx-params 8)
+    (set-llama_context_params-type_v! ctx-params 8))
   (define ctx (llama_new_context_with_model model ctx-params))
   (unless ctx
     (error 'main "failed to create the llama_context"))
   ctx)
 
-(define (init-model! #:path model-path #:context [context 8192] #:n-gpu-layers [ngl #f])
+(define (init-model! #:path model-path #:context [context 8192] #:n-gpu-layers [ngl #f] #:kvcache-quant? [kvcache-quant? #f])
   (define model-params (llama_model_default_params))
   (when ngl
     (set-llama_model_params-n_gpu_layers! model-params ngl))
@@ -79,7 +82,7 @@
   (unless model
     (error 'main "unable to load model"))
 
-  (define ctx (make-context model context))
+  (define ctx (make-context model context #:kvcache-quant? kvcache-quant?))
   (model-context model ctx (make-gvector #:capacity context)))
 
 (llama_backend_init)

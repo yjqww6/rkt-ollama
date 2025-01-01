@@ -77,7 +77,7 @@
                                   (printf "~a\t/~a\t ~a\t~ams~%"
                                           off n kind (- (current-inexact-monotonic-milliseconds) t)))))))
 
-(define (use-ffi-endpoint model ctx)
+(define (use-ffi-endpoint model ctx #:kvcache-quant? [kvcache-quant? #f])
   (define init-model! (dynamic-require 'rkt-ollama/examples/ffi-endpoint 'init-model!))
   (define completion (dynamic-require 'rkt-ollama/examples/ffi-endpoint 'completion))
   (define old-mc (current-model-context))
@@ -85,6 +85,6 @@
     (define free (dynamic-require 'rkt-ollama/examples/ffi-endpoint 'free-model-context))
     (free old-mc)
     (current-model-context #f))
-  (define mc (init-model! #:path model #:context ctx))
+  (define mc (init-model! #:path model #:context ctx #:kvcache-quant? kvcache-quant?))
   (current-model-context mc)
   (current-completion-endpoint (ffi-endpoint completion mc)))
