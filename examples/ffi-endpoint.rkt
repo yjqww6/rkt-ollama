@@ -209,7 +209,7 @@
         [else
          (decode prompt-tokens off n-batch)
          (when progress
-           (progress off n-prompt 'step))
+           (progress (+ off n-batch) n-prompt 'step))
          (event)
          (loop (+ off n-batch))])))
   (when progress
