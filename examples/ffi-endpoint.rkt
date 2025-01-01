@@ -92,35 +92,41 @@
 
 ;;; avoid something like " " "[" vs " ["
 (define (tokenize/cache model prompt-bytes cache buf)
-  (define bos (llama_token_bos model))
-  (let loop ([i 0] [c 0])
+  (define (make-new-tokens cached-c cached-i)
     (cond
-      [(= c (gvector-count cache))
-       (define b (subbytes prompt-bytes i))
-       (match-define (cons tokens n-tokens) (tokenize model b #f))
-       (define new-tokens (make-cvector _llama_token (+ n-tokens (gvector-count cache))))
-       (for ([t (in-gvector cache)]
-             [i (in-naturals)])
-         (cvector-set! new-tokens i t))
-       (for ([i (in-naturals (gvector-count cache))]
-             [o (in-range n-tokens)])
-         (cvector-set! new-tokens i (cvector-ref tokens o)))
-       (cons
-        new-tokens
-        (cvector-length new-tokens))]
-      [(= bos (gvector-ref cache c))
-       (loop i (+ c 1))]
+      [(= cached-c 0) (tokenize model prompt-bytes)]
+      [(< cached-i (bytes-length prompt-bytes))
+       (define-values (rest-tokens rest-n) (tokenize model (subbytes prompt-bytes cached-i) #f))
+       (define-values (cached-tokens _) (make-cached-tokens cached-c rest-n))
+       (for ([y (in-range rest-n)])
+         (cvector-set! cached-tokens (+ cached-c y) (cvector-ref rest-tokens y)))
+       (values cached-tokens (+ cached-c rest-n))]
+      [else
+       (make-cached-tokens cached-c)]))
+  (define (make-cached-tokens cached-c [more 0])
+    (define tokens (make-cvector _llama_token (+ cached-c more)))
+    (for ([x (in-range cached-c)]
+          [t (in-gvector cache)])
+      (cvector-set! tokens x t))
+    (values tokens cached-c))
+  (let loop ([i 0] [c (if (and (> (gvector-count cache) 0)
+                               (= (gvector-ref cache 0) (llama_token_bos model)))
+                          1
+                          0)])
+    (cond
+      [(or (= i (bytes-length prompt-bytes)) (= c (gvector-count cache)))
+       (make-new-tokens c i)]
       [else
        (define n (detoken model (gvector-ref cache c) buf))
        (cond
          [(> (+ i n) (bytes-length prompt-bytes))
-          (tokenize model prompt-bytes)]
+          (make-new-tokens c i)]
          [(for/and ([a (in-bytes prompt-bytes i)]
                     [i (in-range n)])
             (eq? a (bytes-ref buf i)))
           (loop (+ i n) (+ c 1))]
          [else
-          (tokenize model prompt-bytes)])])))
+          (make-new-tokens c i)])])))
 
 (define (tokenize model prompt-bytes [whole? #t])
   (define attempt (make-cvector _llama_token (* 2 (bytes-length prompt-bytes))))
@@ -130,9 +136,9 @@
      (define prompt-tokens (make-cvector _llama_token (- n-prompt)))
      (when (< (llama_tokenize model prompt-bytes (bytes-length prompt-bytes) (cvector-ptr prompt-tokens) (- n-prompt) whole? #t) 0)
        (error 'tokenize "failed"))
-     (cons prompt-tokens (- n-prompt))]
+     (values prompt-tokens (- n-prompt))]
     [else
-     (cons attempt n-prompt)]))
+     (values attempt n-prompt)]))
 
 (define (use-prompt-cache! tokens n cache context)
   (define count (gvector-count cache))
@@ -183,7 +189,7 @@
       (void)))
     
   (define prompt-bytes (string->bytes/utf-8 prompt))
-  (match-define (cons prompt-tokens n-prompt) (tokenize/cache model prompt-bytes cache buf))
+  (define-values (prompt-tokens n-prompt) (tokenize/cache model prompt-bytes cache buf))
   (when (> n-prompt max-ctx)
     (error 'completion "too large"))
 
