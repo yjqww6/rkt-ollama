@@ -129,7 +129,7 @@
           (make-new-tokens c i)])])))
 
 (define (tokenize model prompt-bytes [whole? #t])
-  (define attempt (make-cvector _llama_token (* 2 (bytes-length prompt-bytes))))
+  (define attempt (make-cvector _llama_token (bytes-length prompt-bytes)))
   (define n-prompt (llama_tokenize model prompt-bytes (bytes-length prompt-bytes) (cvector-ptr attempt) (cvector-length attempt) whole? #t))
   (cond
     [(< n-prompt 0)
