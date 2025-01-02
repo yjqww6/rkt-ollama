@@ -7,7 +7,7 @@
          ffi/unsafe/atomic
          ffi/unsafe/alloc
          data/gvector)
-(provide init-model! completion free-model-context)
+(provide init-model! completion free-model-context another-template)
 
 (struct model-context (model context cache))
 
@@ -99,7 +99,7 @@
     (cond
       [(= cached-c 0) (tokenize model prompt-bytes)]
       [(< cached-i (bytes-length prompt-bytes))
-       (define-values (rest-tokens rest-n) (tokenize model (subbytes prompt-bytes cached-i) #f))
+       (define-values (rest-tokens rest-n) (tokenize model (subbytes prompt-bytes cached-i) #:whole? #f))
        (define-values (cached-tokens _) (make-cached-tokens cached-c rest-n))
        (for ([y (in-range rest-n)])
          (cvector-set! cached-tokens (+ cached-c y) (cvector-ref rest-tokens y)))
@@ -131,13 +131,13 @@
          [else
           (make-new-tokens c i)])])))
 
-(define (tokenize model prompt-bytes [whole? #t])
+(define (tokenize model prompt-bytes #:whole? [whole? #t] #:special? [special? #t])
   (define attempt (make-cvector _llama_token (bytes-length prompt-bytes)))
-  (define n-prompt (llama_tokenize model prompt-bytes (bytes-length prompt-bytes) (cvector-ptr attempt) (cvector-length attempt) whole? #t))
+  (define n-prompt (llama_tokenize model prompt-bytes (bytes-length prompt-bytes) (cvector-ptr attempt) (cvector-length attempt) whole? special?))
   (cond
     [(< n-prompt 0)
      (define prompt-tokens (make-cvector _llama_token (- n-prompt)))
-     (when (< (llama_tokenize model prompt-bytes (bytes-length prompt-bytes) (cvector-ptr prompt-tokens) (- n-prompt) whole? #t) 0)
+     (when (< (llama_tokenize model prompt-bytes (bytes-length prompt-bytes) (cvector-ptr prompt-tokens) (- n-prompt) whole? special?) 0)
        (error 'tokenize "failed"))
      (values prompt-tokens (- n-prompt))]
     [else
@@ -190,9 +190,11 @@
     ;; TODO better way to clear ticks
     (for ([i (in-range 10000)])
       (void)))
-    
-  (define prompt-bytes (string->bytes/utf-8 prompt))
-  (define-values (prompt-tokens n-prompt) (tokenize/cache model prompt-bytes cache buf))
+
+  (define-values (prompt-tokens n-prompt)
+    (if (cvector? prompt)
+        (values prompt (cvector-length prompt))
+        (tokenize/cache model (string->bytes/utf-8 prompt) cache buf)))
   (when (> n-prompt max-ctx)
     (error 'completion "too large"))
 
@@ -249,3 +251,45 @@
   (when perf
     (perf n-prompt (- n-prompt off) (- decode-time prompt-time)
           n-decode (- end-time decode-time))))
+
+;;; "safe" for special tokens
+(define (another-template tpl mc msgs)
+  (define model (model-context-model mc))
+  (define (start role)
+    (define-values (tokens n) (tokenize model (string->bytes/utf-8 (format (case tpl
+                                                                             [("chatml") "<|im_start|>~a\n"]
+                                                                             [("llama3") "<|start_header_id|>~a<|end_header_id|>\n\n"])
+                                                                           role))
+                                        #:whole? #f))
+    (cons tokens n))
+  (define (end)
+    (define-values (tokens n) (tokenize model (string->bytes/utf-8 (case tpl
+                                                                             [("chatml") "<|im_end|>\n"]
+                                                                             [("llama3") "<|eot_id|>"]))
+                                        #:whole? #f))
+    (cons tokens n))
+  (define templated
+    (cons (call-with-values (λ () (tokenize model #"" #:whole? #t)) cons)
+          (let loop ([msgs msgs])
+            (match msgs
+              [(list (hash 'role "assistant" 'content content #:open))
+               (list (start "assistant") content)]
+              [(cons (hash 'role role 'content content #:open) r)
+               (list* (start role) content (end) (loop r))]
+              ['()
+               (list (start "assistant"))]))))
+  (define tokenized
+    (for/list ([item (in-list templated)])
+      (if (string? item)
+          (call-with-values (λ () (tokenize model (string->bytes/utf-8 item) #:whole? #f #:special? #f)) cons)
+          item)))
+  (define n-tokens
+    (for/sum ([item (in-list tokenized)])
+      (cdr item)))
+  (define result (make-cvector _llama_token n-tokens))
+  (for/fold ([i 0])
+            ([item (in-list tokenized)])
+    (for ([x (in-range (cdr item))])
+      (cvector-set! result (+ i x) (cvector-ref  (car item) x)))
+    (+ i (cdr item)))
+  result)
