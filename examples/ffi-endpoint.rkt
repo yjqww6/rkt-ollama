@@ -7,9 +7,9 @@
          ffi/unsafe/atomic
          ffi/unsafe/alloc
          data/gvector)
-(provide init-model! completion free-model-context another-template)
+(provide init-model! enlarge-context! completion free-model-context another-template)
 
-(struct model-context (model context cache tpl-cache))
+(struct model-context (model [context #:mutable] cache tpl-cache))
 
 (define (free-model-context mc)
   (match-define (model-context model context _ _) mc)
@@ -304,3 +304,16 @@
       (cvector-set! result (+ i x) (cvector-ref  (car item) x)))
     (+ i (cdr item)))
   result)
+
+(define (enlarge-context! mc new-size #:kvcache-quant? [kvcache-quant? #f])
+  (match-define (model-context model ctx _ _) mc)
+  (when (<= new-size (llama_n_ctx ctx))
+    (error 'enlarge-context! "smaller"))
+  (define n (llama_state_seq_get_size ctx 0))
+  (define buf (malloc n 'raw))
+  (llama_state_seq_get_data ctx buf n 0)
+  (define new-ctx (make-context model new-size #:kvcache-quant? kvcache-quant?))
+  (llama_state_seq_set_data new-ctx buf n 0)
+  (set-model-context-context! mc new-ctx)
+  (llama_free ctx)
+  (free buf))

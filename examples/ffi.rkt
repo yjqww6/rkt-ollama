@@ -138,3 +138,6 @@
 (define-llama llama_n_ctx (_fun _pointer -> _uint32))
 (define-llama llama_n_vocab (_fun _pointer -> _uint32))
 (define-llama llama_get_logits_ith (_fun _pointer _int32 -> _pointer))
+(define-llama llama_state_seq_set_data (_fun _pointer _pointer _size _int32 -> _size))
+(define-llama llama_state_seq_get_size (_fun _pointer _int32 -> _size))
+(define-llama llama_state_seq_get_data (_fun _pointer _pointer _size _int32 -> _size))

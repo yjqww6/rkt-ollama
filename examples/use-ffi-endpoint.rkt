@@ -1,6 +1,6 @@
 #lang racket/base
 (require "../main.rkt")
-(provide use-ffi-endpoint)
+(provide use-ffi-endpoint enlarge-context!)
 
 (define (bytes-suffix? buf n sub)
   (and
@@ -91,3 +91,7 @@
   (when tpl
     (define f (dynamic-require 'rkt-ollama/examples/ffi-endpoint 'another-template))
     (current-chat-template (λ (msgs) (f tpl mc msgs)))))
+
+(define (enlarge-context! ctx #:kvcache-quant? [kvcache-quant? #f])
+  (define f (dynamic-require 'rkt-ollama/examples/ffi-endpoint 'enlarge-context!))
+  (f (current-model-context) ctx #:kvcache-quant? kvcache-quant?))
