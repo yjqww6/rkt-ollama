@@ -9,10 +9,10 @@
          data/gvector)
 (provide init-model! completion free-model-context another-template)
 
-(struct model-context (model context cache))
+(struct model-context (model context cache tpl-cache))
 
 (define (free-model-context mc)
-  (match-define (model-context model context _) mc)
+  (match-define (model-context model context _ _) mc)
   (llama_free context)
   (llama_free_model model)
   (void))
@@ -83,7 +83,8 @@
     (error 'main "unable to load model"))
 
   (define ctx (make-context model context #:kvcache-quant? kvcache-quant?))
-  (model-context model ctx (make-gvector #:capacity context)))
+  (model-context model ctx (make-gvector #:capacity context)
+                 (cons (make-hash) (make-weak-hasheq))))
 
 (llama_backend_init)
 
@@ -169,7 +170,7 @@
                     #:grammar [grammar #f]
                     #:progress [progress #f])
 
-  (match-define (model-context model ctx cache) mc)
+  (match-define (model-context model ctx cache _) mc)
   (define max-ctx (llama_n_ctx ctx))
 
   (define buf (make-bytes 128))
@@ -255,40 +256,50 @@
 ;;; "safe" for special tokens
 (define (another-template tpl mc msgs)
   (define model (model-context-model mc))
+  (match-define (cons special-cache content-cache) (model-context-tpl-cache mc))
+  (define (tokenize-special str [whole? #f])
+    (cond
+      [(hash-ref special-cache str (λ () #f)) => values]
+      [else
+       (define-values (t n) (tokenize model (string->bytes/utf-8 str) #:whole? whole?))
+       (define r (cons t n))
+       (hash-set! special-cache str r)
+       r]))
+  (define (tokenize-content str)
+    (cond
+      [(hash-ref content-cache str (λ () #f)) => values]
+      [else
+       (define-values (t n) (tokenize model (string->bytes/utf-8 str) #:whole? #f #:special? #f))
+       (define r (cons t n))
+       (hash-set! content-cache str r)
+       r]))
   (define (start role)
-    (define-values (tokens n) (tokenize model (string->bytes/utf-8 (format (case tpl
-                                                                             [("chatml") "<|im_start|>~a\n"]
-                                                                             [("llama3") "<|start_header_id|>~a<|end_header_id|>\n\n"])
-                                                                           role))
-                                        #:whole? #f))
-    (cons tokens n))
+    (tokenize-special
+     (format (case tpl
+               [("chatml") "<|im_start|>~a\n"]
+               [("llama3") "<|start_header_id|>~a<|end_header_id|>\n\n"])
+             role)))
   (define (end)
-    (define-values (tokens n) (tokenize model (string->bytes/utf-8 (case tpl
-                                                                             [("chatml") "<|im_end|>\n"]
-                                                                             [("llama3") "<|eot_id|>"]))
-                                        #:whole? #f))
-    (cons tokens n))
+    (tokenize-special
+     (case tpl
+       [("chatml") "<|im_end|>\n"]
+       [("llama3") "<|eot_id|>"])))
   (define templated
-    (cons (call-with-values (λ () (tokenize model #"" #:whole? #t)) cons)
+    (cons (tokenize-special "" #t)
           (let loop ([msgs msgs])
             (match msgs
               [(list (hash 'role "assistant" 'content content #:open))
-               (list (start "assistant") content)]
+               (list (start "assistant") (tokenize-content content))]
               [(cons (hash 'role role 'content content #:open) r)
-               (list* (start role) content (end) (loop r))]
+               (list* (start role) (tokenize-content content) (end) (loop r))]
               ['()
                (list (start "assistant"))]))))
-  (define tokenized
-    (for/list ([item (in-list templated)])
-      (if (string? item)
-          (call-with-values (λ () (tokenize model (string->bytes/utf-8 item) #:whole? #f #:special? #f)) cons)
-          item)))
   (define n-tokens
-    (for/sum ([item (in-list tokenized)])
+    (for/sum ([item (in-list templated)])
       (cdr item)))
   (define result (make-cvector _llama_token n-tokens))
   (for/fold ([i 0])
-            ([item (in-list tokenized)])
+            ([item (in-list templated)])
     (for ([x (in-range (cdr item))])
       (cvector-set! result (+ i x) (cvector-ref  (car item) x)))
     (+ i (cdr item)))
