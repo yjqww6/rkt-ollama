@@ -11,19 +11,16 @@
 
 (struct model-context (model [context #:mutable] cache tpl-cache))
 
-(define (free-model-context mc)
-  (match-define (model-context model context _ _) mc)
-  (llama_free context)
-  (llama_free_model model)
-  (void))
-
 (define n-batch 2048)
 
-(define alloc-sampler
-  ((allocator llama_sampler_free) llama_sampler_chain_init))
+(define-syntax-rule (define-alloc (Alloc Free) Allocator Deallocator)
+  (begin
+    (define Alloc ((allocator Deallocator) Allocator))
+    (define Free ((deallocator) Deallocator))))
 
-(define free-sampler
-  ((deallocator) llama_sampler_free))
+(define-alloc (alloc-sampler free-sampler) llama_sampler_chain_init llama_sampler_free)
+(define-alloc (load-model free-model) llama_load_model_from_file llama_free_model)
+(define-alloc (alloc-context free-context) llama_new_context_with_model llama_free)
 
 (define (make-sampler model grammar)
   (define sparams (llama_sampler_chain_default_params))
@@ -69,7 +66,7 @@
   (when kvcache-quant?
     (set-llama_context_params-type_k! ctx-params 8)
     (set-llama_context_params-type_v! ctx-params 8))
-  (define ctx (llama_new_context_with_model model ctx-params))
+  (define ctx (alloc-context model ctx-params))
   (unless ctx
     (error 'main "failed to create the llama_context"))
   ctx)
@@ -78,13 +75,20 @@
   (define model-params (llama_model_default_params))
   (when ngl
     (set-llama_model_params-n_gpu_layers! model-params ngl))
-  (define model (llama_load_model_from_file model-path model-params))
+  (define model (load-model model-path model-params))
   (unless model
     (error 'main "unable to load model"))
 
   (define ctx (make-context model context #:kvcache-quant? kvcache-quant?))
   (model-context model ctx (make-gvector #:capacity context)
                  (cons (make-hash) (make-weak-hasheq))))
+
+(define (free-model-context mc)
+  (match-define (model-context model context _ _) mc)
+  (when context
+    (free-context context))
+  (free-model model)
+  (void))
 
 (llama_backend_init)
 
@@ -171,6 +175,8 @@
                     #:progress [progress #f])
 
   (match-define (model-context model ctx cache _) mc)
+  (unless ctx
+    (error 'completion "no context"))
   (define max-ctx (llama_n_ctx ctx))
 
   (define buf (make-bytes 128))
@@ -307,13 +313,16 @@
 
 (define (enlarge-context! mc new-size #:kvcache-quant? [kvcache-quant? #f])
   (match-define (model-context model ctx _ _) mc)
+  (unless ctx
+    (error 'enlarge-context! "no context"))
   (when (<= new-size (llama_n_ctx ctx))
     (error 'enlarge-context! "smaller"))
   (define n (llama_state_seq_get_size ctx 0))
   (define buf (malloc n 'raw))
   (llama_state_seq_get_data ctx buf n 0)
+  (set-model-context-context! mc #f)
+  (free-context ctx)
   (define new-ctx (make-context model new-size #:kvcache-quant? kvcache-quant?))
   (llama_state_seq_set_data new-ctx buf n 0)
-  (set-model-context-context! mc new-ctx)
-  (llama_free ctx)
-  (free buf))
+  (free buf)
+  (set-model-context-context! mc new-ctx))
