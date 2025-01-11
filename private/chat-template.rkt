@@ -64,6 +64,14 @@
   (fprintf s "<|im_start|>assistant\n~a" (prefill-content prefill))
   (get-output-string s))
 
+(define (phi4 messages)
+  (define s (open-output-string))
+  (define-values (msgs prefill) (split-messages messages))
+  (for ([(role content) (in-messages msgs)])
+    (fprintf s "<|im_start|>~a<|im_sep|>~a<|im_end|>" role content))
+  (fprintf s "<|im_start|>assistant<|im_sep|>~a" (prefill-content prefill))
+  (get-output-string s))
+
 (define (llama3 messages)
   (define s (open-output-string))
   (define-values (msgs prefill) (split-messages messages))
@@ -124,6 +132,7 @@
 (define (chat-template template-name)
   (match template-name
     ["chatml" chatml]
+    ["phi4" phi4]
     ["llama3" llama3]
     ["gemma2" gemma2]
     ["mistral" mistral]
