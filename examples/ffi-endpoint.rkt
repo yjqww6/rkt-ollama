@@ -7,7 +7,7 @@
          ffi/unsafe/atomic
          ffi/unsafe/alloc
          data/gvector)
-(provide init-model! enlarge-context! completion free-model-context another-template)
+(provide init-model! enlarge-context! completion free-model-context ffi-template-postprocessor)
 
 (struct model-context (model [context #:mutable] cache tpl-cache))
 
@@ -260,7 +260,7 @@
           n-decode (- end-time decode-time))))
 
 ;;; "safe" for special tokens
-(define (another-template tpl mc msgs)
+(define (ffi-template-postprocessor mc parts)
   (define model (model-context-model mc))
   (match-define (cons special-cache content-cache) (model-context-tpl-cache mc))
   (define (tokenize-special str [whole? #f])
@@ -279,27 +279,12 @@
        (define r (cons t n))
        (hash-set! content-cache str r)
        r]))
-  (define (start role)
-    (tokenize-special
-     (format (case tpl
-               [("chatml") "<|im_start|>~a\n"]
-               [("llama3") "<|start_header_id|>~a<|end_header_id|>\n\n"])
-             role)))
-  (define (end)
-    (tokenize-special
-     (case tpl
-       [("chatml") "<|im_end|>\n"]
-       [("llama3") "<|eot_id|>"])))
   (define templated
     (cons (tokenize-special "" #t)
-          (let loop ([msgs msgs])
-            (match msgs
-              [(list (hash 'role "assistant" 'content content #:open))
-               (list (start "assistant") (tokenize-content content))]
-              [(cons (hash 'role role 'content content #:open) r)
-               (list* (start role) (tokenize-content content) (end) (loop r))]
-              ['()
-               (list (start "assistant"))]))))
+          (for/list ([part (in-list parts)])
+            (cond
+              [(box? part) (tokenize-special (unbox part))]
+              [else (tokenize-content part)]))))
   (define n-tokens
     (for/sum ([item (in-list templated)])
       (cdr item)))

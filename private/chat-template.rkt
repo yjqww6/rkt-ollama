@@ -56,38 +56,60 @@
            (cdr msgs))]
          [else (cons (car msgs) (loop (cdr msgs)))]))]))
 
+(define (open-output)
+  (box '()))
+(define (push output v #:special? [special? #f])
+  (set-box! output (cons (if special? (box v) v) (unbox output))))
+(define (get-output output)
+  (reverse (unbox output)))
+
 (define (chatml messages)
-  (define s (open-output-string))
+  (define s (open-output))
   (define-values (msgs prefill) (split-messages messages))
   (for ([(role content) (in-messages msgs)])
-    (fprintf s "<|im_start|>~a\n~a<|im_end|>\n" role content))
-  (fprintf s "<|im_start|>assistant\n~a" (prefill-content prefill))
-  (get-output-string s))
+    (push s (format "<|im_start|>~a\n" role) #:special? #t)
+    (push s content)
+    (push s "<|im_end|>\n" #:special? #t))
+  (push s "<|im_start|>assistant\n" #:special? #t)
+  (when prefill
+    (push s (prefill-content prefill)))
+  (get-output s))
 
 (define (phi4 messages)
-  (define s (open-output-string))
+  (define s (open-output))
   (define-values (msgs prefill) (split-messages messages))
   (for ([(role content) (in-messages msgs)])
-    (fprintf s "<|im_start|>~a<|im_sep|>~a<|im_end|>" role content))
-  (fprintf s "<|im_start|>assistant<|im_sep|>~a" (prefill-content prefill))
-  (get-output-string s))
+    (push s (format "<|im_start|>~a<|im_sep|>" role) #:special? #t)
+    (push s content)
+    (push s "<|im_end|>" #:special? #t))
+  (push s "<|im_start|>assistant<|im_sep|>" #:special? #t)
+  (when prefill
+    (push s (prefill-content prefill)))
+  (get-output s))
 
 (define (llama3 messages)
-  (define s (open-output-string))
+  (define s (open-output))
   (define-values (msgs prefill) (split-messages messages))
   (for ([(role content) (in-messages msgs)])
-    (fprintf s "<|start_header_id|>~a<|end_header_id|>\n\n~a<|eot_id|>" role content))
-  (fprintf s "<|start_header_id|>assistant<|end_header_id|>\n\n~a" (prefill-content prefill))
-  (get-output-string s))
+    (push s (format "<|start_header_id|>~a<|end_header_id|>\n\n" role) #:special? #t)
+    (push s content)
+    (push s "<|eot_id|>" #:special? #t))
+  (push s "<|start_header_id|>assistant<|end_header_id|>\n\n" #:special? #t)
+  (when prefill
+    (push s (prefill-content prefill)))
+  (get-output s))
 
 (define (gemma2 messages)
-  (define s (open-output-string))
+  (define s (open-output))
   (define-values (sys msgs prefill) (split-messages messages #f))
   (for ([(role content) (in-messages (inject-system-to-first-user msgs sys) #:assistant "model")])
-    (fprintf s "<start_of_turn>~a\n~a<end_of_turn>\n"
-             role content))
-  (fprintf s "<start_of_turn>model\n~a" (prefill-content prefill))
-  (get-output-string s))
+    (push s (format "<start_of_turn>~a\n" role) #:special? #t)
+    (push s content)
+    (push s "<end_of_turn>\n" #:special? #t))
+  (push s "<start_of_turn>model\n" #:special? #t)
+  (when prefill
+    (push s (prefill-content prefill)))
+  (get-output s))
 
 (define (last-msg msgs)
   (if (null? msgs) #f (last msgs)))
@@ -97,7 +119,7 @@
 (define (mistral/internal messages v7? tekken?)
   (define merge-sys? (not v7?))
   (define leading-space (if tekken? "" " "))
-  (define s (open-output-string))
+  (define s (open-output))
   (define-values (sys msgs prefill)
     (if merge-sys?
         (let-values ([(msgs prefill) (split-messages messages #t)])
@@ -108,17 +130,30 @@
   (for ([(role content) (in-messages new-msgs)]
         [msg (in-list new-msgs)])
     (cond
-      [(string=? role "system") (fprintf s "[SYSTEM_PROMPT] ~a[/SYSTEM_PROMPT]" content)]
-      [(string=? role "assistant") (fprintf s "~a</s>" content)]
-      [(string=? role "tool") (fprintf s "[TOOL_RESULTS]~a~a[/TOOL_RESULTS]" leading-space content)]
+      [(string=? role "system")
+       (push s "[SYSTEM_PROMPT]" #:special? #t)
+       (push s (format " ~a" content))
+       (push s "[/SYSTEM_PROMPT]" #:special? #t)]
+      [(string=? role "assistant")
+       (push s content)
+       (push s "</s>" #:special? #t)]
+      [(string=? role "tool")
+       (push s "[TOOL_RESULTS]" #:special? #t)
+       (push s (format "~a~a" leading-space content))
+       (push s "[/TOOL_RESULTS]" #:special? #t)]
       [else
        (when (eq? last msg)
          (define tools (current-tools-string))
          (when tools
-           (fprintf s "[AVAILABLE_TOOLS]~a~a[/AVAILABLE_TOOLS]" leading-space tools)))
-       (fprintf s "[INST]~a~a[/INST]" leading-space content)]))
-  (fprintf s "~a" (prefill-content prefill))
-  (get-output-string s))
+           (push s "[AVAILABLE_TOOLS]" #:special? #t)
+           (push s (format "~a~a" leading-space tools))
+           (push s "[/AVAILABLE_TOOLS]" #:special? #t)))
+       (push s "[INST]" #:special? #t)
+       (push s (format "~a~a" leading-space content))
+       (push s "[/INST]" #:special? #t)]))
+  (when prefill
+    (push s (prefill-content prefill)))
+  (get-output s))
 
 (define (mistral msgs)
   (mistral/internal msgs #f #f))

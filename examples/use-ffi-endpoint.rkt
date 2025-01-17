@@ -89,8 +89,8 @@
   (current-model-context mc)
   (current-completion-endpoint (ffi-endpoint completion mc))
   (when tpl
-    (define f (dynamic-require 'rkt-ollama/examples/ffi-endpoint 'another-template))
-    (current-chat-template (λ (msgs) (f tpl mc msgs)))))
+    (define f (dynamic-require 'rkt-ollama/examples/ffi-endpoint 'ffi-template-postprocessor))
+    (current-template-postprocessor (λ (parts) (f mc parts)))))
 
 (define (enlarge-context! ctx #:kvcache-quant? [kvcache-quant? #f])
   (define f (dynamic-require 'rkt-ollama/examples/ffi-endpoint 'enlarge-context!))

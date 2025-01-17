@@ -95,7 +95,7 @@
   (call/history
    message
    (λ (messages sp _)
-     (define prompt (template messages))
+     (define prompt ((current-template-postprocessor) (template messages)))
      (define new-output (combine-output sp output))
      (when fake (write-string fake new-output))
      (call/interrupt

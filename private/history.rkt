@@ -54,5 +54,8 @@
   (current-history '()))
 
 ;;; for raw completion
+(define (default-template-postprocessor parts)
+  (apply string-append-immutable (map (λ (s) (if (box? s) (unbox s) s)) parts)))
 (define current-chat-template (make-parameter (λ (messages) (error 'empty-template))))
 (define current-messages-preprocessor (make-parameter values))
+(define current-template-postprocessor (make-parameter default-template-postprocessor))
