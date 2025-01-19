@@ -139,6 +139,10 @@
     [else (clip content)])
   (current-history history))
 
+(define (last-response)
+  (match-define (hash 'content content #:open) (last (current-history)))
+  content)
+
 (define (default-repl-prompt)
   (string-append
    (if (current-paste-text) "text " "")
