@@ -1,6 +1,6 @@
 #lang racket/base
 (require racket/list racket/match racket/sequence racket/string)
-(provide chat-template current-tools-string skip-cot-tokens)
+(provide chat-template current-tools-string skip-cot-tokens current-skip-cot-tokens)
 ;;;; mostly for llama.cpp prefill
 
 (define (split-messages messages [merge-system? #t])
@@ -111,14 +111,19 @@
     (push s (prefill-content prefill)))
   (get-output s))
 
+(define current-skip-cot-tokens (make-parameter #t))
+
 (define (skip-cot-tokens msgs [sep "</think>"])
-  (for/list ([m (in-list msgs)])
-    (match m
-      [(hash 'role "assistant" 'content content #:open)
-       #:when (string-contains? content sep)
-       (hash-set m 'content
-                 (last (string-split content sep)))]
-      [else m])))
+  (cond
+    [(current-skip-cot-tokens)
+     (for/list ([m (in-list msgs)])
+       (match m
+         [(hash 'role "assistant" 'content content #:open)
+          #:when (string-contains? content sep)
+          (hash-set m 'content
+                    (last (string-split content sep)))]
+         [else m]))]
+    [else msgs]))
 
 (define (deepseek3 messages)
   (define s (open-output))
