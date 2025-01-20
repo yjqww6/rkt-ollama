@@ -5,6 +5,7 @@
          racket/list
          racket/match
          racket/port
+         racket/string
          racket/system
          "main.rkt"
          "private/chat-template.rkt")
@@ -160,6 +161,20 @@
      (current-chat-template (chat-template tpl))
      (current-chat (make-default-chat chat-by-completion))])
   (use-llama-cpp))
+
+(define (skip-cot-tokens [sep "</think>"]
+                         [next (current-messages-preprocessor)]
+                         #:final [final current-messages-preprocessor])
+  (define (f msgs)
+    (next
+     (for/list ([m (in-list msgs)])
+       (match m
+         [(hash 'role "assistant" 'content content #:open)
+          #:when (string-contains? content sep)
+          (hash-set m 'content
+                    (last (string-split content sep)))]
+         [else m]))))
+  (final f))
 
 (module+ main
   (require expeditor (submod expeditor configure)
