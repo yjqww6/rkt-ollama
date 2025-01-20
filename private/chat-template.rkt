@@ -1,6 +1,6 @@
 #lang racket/base
 (require racket/list racket/match racket/sequence racket/string)
-(provide chat-template current-tools-string)
+(provide chat-template current-tools-string skip-cot-tokens)
 ;;;; mostly for llama.cpp prefill
 
 (define (split-messages messages [merge-system? #t])
@@ -111,6 +111,34 @@
     (push s (prefill-content prefill)))
   (get-output s))
 
+(define (skip-cot-tokens msgs [sep "</think>"])
+  (for/list ([m (in-list msgs)])
+    (match m
+      [(hash 'role "assistant" 'content content #:open)
+       #:when (string-contains? content sep)
+       (hash-set m 'content
+                 (last (string-split content sep)))]
+      [else m])))
+
+(define (deepseek3 messages)
+  (define s (open-output))
+  (define-values (sys msgs prefill) (split-messages messages #f))
+  (when sys
+    (push s sys))
+  (for ([(role content) (in-messages (skip-cot-tokens msgs))])
+    (cond
+      [(string=? role "user")
+       (push s "<｜User｜>" #:special? #t)
+       (push s content)]
+      [(string=? role "assistant")
+       (push s "<｜Assistant｜>" #:special? #t)
+       (push s content)
+       (push s "<｜end▁of▁sentence｜>" #:special? #t)]))
+  (push s "<｜Assistant｜>" #:special? #t)
+  (when prefill
+    (push s (prefill-content prefill)))
+  (get-output s))
+
 (define (last-msg msgs)
   (if (null? msgs) #f (last msgs)))
 
@@ -173,4 +201,5 @@
     ["mistral" mistral]
     ["mistral/v7" mistral/v7]
     ["mistral/v3/tekken" mistral/v3/tekken]
+    ["deepseek3" deepseek3]
     [else (error "Unknown template name: ~a" template-name)]))
