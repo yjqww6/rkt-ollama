@@ -1,5 +1,5 @@
 #lang racket
-(require racket/gui/base "../private/history.rkt")
+(require racket/gui/base framework "../private/history.rkt")
 (provide edit-history!)
 
 (define (edit-history!)
@@ -11,6 +11,7 @@
 (define (edit-history initial-data)
   (define dialog (new dialog% [label "History Editor"] [width 480] [height 640]
                       [style '(resize-border close-button)]))
+  (define main-panel (new panel:vertical-dragable% [parent dialog]))
 
   (define items initial-data)
   
@@ -25,20 +26,23 @@
               [else
                (string-append (substring str 0 197) "...")]))))
 
-  (define list-box (new list-box% [parent dialog] [label "History"]
+  (define list-box (new list-box% [parent main-panel] [label "History"]
                         [style '(single column-headers)]
                         [choices '()]
                         [columns (list "Role" "Content")]
-                        [callback (λ (b e) (on-selection-change))]))
+                        [callback (λ (b e) (on-selection-change))]
+                        [stretchable-height #t]))
 
-  (define role-field (new text-field% [parent dialog] [label "Role: "] [init-value "user"]))
+  (define down-pane (new vertical-pane% [parent main-panel]))
+
+  (define role-field (new text-field% [parent down-pane] [label "Role: "] [init-value "user"]))
   (define content-field
     (new text-field%
-         [parent dialog]
+         [parent down-pane]
          [label "Content: "]
          [init-value ""]
          [style '(multiple)]
-         [stretchable-height #f]))
+         [stretchable-height #t]))
 
   (define (on-selection-change)
     (define selected-index (send list-box get-selection))
@@ -80,7 +84,7 @@
       (send list-box set-selection selected-index)
       (on-selection-change)))
 
-  (define h-panel (new horizontal-pane% [parent dialog] [stretchable-height #f]))
+  (define h-panel (new horizontal-pane% [parent down-pane] [stretchable-height #f]))
 
   (define add-button (new button% [parent h-panel] [label "Add Item"] [callback (λ (b e) (add-item))]))
   (define delete-button (new button% [parent h-panel] [label "Delete Item"] [callback (λ (b e) (delete-item))]))
