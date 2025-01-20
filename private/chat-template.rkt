@@ -124,7 +124,7 @@
   (define s (open-output))
   (define-values (sys msgs prefill) (split-messages messages #f))
   (when sys
-    (push s sys))
+    (push s (hash-ref sys 'content)))
   (for ([(role content) (in-messages (skip-cot-tokens msgs))])
     (cond
       [(string=? role "user")
