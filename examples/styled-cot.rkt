@@ -1,0 +1,15 @@
+#lang racket/base
+(require "../main.rkt" racket/port)
+(provide make-styled-cot-completion-endpoint)
+
+(define (make-styled-cot-completion-endpoint #:stop [stop "</think>"] #:style [style "\033[7m"])
+  (define completion (current-completion-endpoint))
+  (λ (prompt output)
+    (define o (open-output-string))
+    (display style)
+    (parameterize ([current-stop (list stop)])
+      (completion prompt (combine-output output o)))
+    (write-string stop output)
+    (display "\033[0m")
+    (define new-prompt (string-append prompt (get-output-string o) "</think>"))
+    (completion new-prompt output)))
