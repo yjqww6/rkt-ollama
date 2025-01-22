@@ -19,25 +19,25 @@
     (define Free ((deallocator) Deallocator))))
 
 (define-alloc (alloc-sampler free-sampler) llama_sampler_chain_init llama_sampler_free)
-(define-alloc (load-model free-model) llama_load_model_from_file llama_free_model)
+(define-alloc (load-model free-model) llama_model_load_from_file llama_model_free)
 (define-alloc (alloc-context free-context) llama_new_context_with_model llama_free)
 
-(define (make-sampler model grammar)
+(define (make-sampler vocab grammar)
   (define sparams (llama_sampler_chain_default_params))
   (set-llama_sampler_chain_params-no_perf! sparams #f)
   (define smpl (alloc-sampler sparams))
   (when grammar
     (llama_sampler_chain_add
      smpl
-     (llama_sampler_init_grammar model (string->bytes/utf-8 grammar) #"root")))
+     (llama_sampler_init_grammar vocab (string->bytes/utf-8 grammar) #"root")))
   (llama_sampler_chain_add smpl (llama_sampler_init_top_k 40))
   (llama_sampler_chain_add smpl (llama_sampler_init_min_p 0.05 1))
   (llama_sampler_chain_add smpl (llama_sampler_init_temp 0.8))
   (llama_sampler_chain_add smpl (llama_sampler_init_dist LLAMA_DEFAULT_SEED))
   smpl)
 
-(define (simple-sample model context)
-  (define n-vocab (llama_n_vocab model))
+(define (simple-sample vocab context)
+  (define n-vocab (llama_vocab_n_tokens vocab))
   (define logits (llama_get_logits_ith context -1))
   (define-values (id logit)
     (for/fold ([id 0]
@@ -92,19 +92,19 @@
 
 (llama_backend_init)
 
-(define (detoken model id buf)
-  (define n (llama_token_to_piece model id buf 128 0 #t))
+(define (detoken vocab id buf)
+  (define n (llama_token_to_piece vocab id buf 128 0 #t))
   (when (< n 0)
     (error 'decode-token "failed to convert token to piece"))
   n)
 
 ;;; avoid something like " " "[" vs " ["
-(define (tokenize/cache model prompt-bytes cache buf)
+(define (tokenize/cache vocab prompt-bytes cache buf)
   (define (make-new-tokens cached-c cached-i)
     (cond
-      [(= cached-c 0) (tokenize model prompt-bytes)]
+      [(= cached-c 0) (tokenize vocab prompt-bytes)]
       [(< cached-i (bytes-length prompt-bytes))
-       (define-values (rest-tokens rest-n) (tokenize model (subbytes prompt-bytes cached-i) #:whole? #f))
+       (define-values (rest-tokens rest-n) (tokenize vocab (subbytes prompt-bytes cached-i) #:whole? #f))
        (define-values (cached-tokens _) (make-cached-tokens cached-c rest-n))
        (for ([y (in-range rest-n)])
          (cvector-set! cached-tokens (+ cached-c y) (cvector-ref rest-tokens y)))
@@ -118,14 +118,14 @@
       (cvector-set! tokens x t))
     (values tokens cached-c))
   (let loop ([i 0] [c (if (and (> (gvector-count cache) 0)
-                               (= (gvector-ref cache 0) (llama_token_bos model)))
+                               (= (gvector-ref cache 0) (llama_token_bos vocab)))
                           1
                           0)])
     (cond
       [(or (= i (bytes-length prompt-bytes)) (= c (gvector-count cache)))
        (make-new-tokens c i)]
       [else
-       (define n (detoken model (gvector-ref cache c) buf))
+       (define n (detoken vocab (gvector-ref cache c) buf))
        (cond
          [(> (+ i n) (bytes-length prompt-bytes))
           (make-new-tokens c i)]
@@ -136,13 +136,13 @@
          [else
           (make-new-tokens c i)])])))
 
-(define (tokenize model prompt-bytes #:whole? [whole? #t] #:special? [special? #t])
+(define (tokenize vocab prompt-bytes #:whole? [whole? #t] #:special? [special? #t])
   (define attempt (make-cvector _llama_token (bytes-length prompt-bytes)))
-  (define n-prompt (llama_tokenize model prompt-bytes (bytes-length prompt-bytes) (cvector-ptr attempt) (cvector-length attempt) whole? special?))
+  (define n-prompt (llama_tokenize vocab prompt-bytes (bytes-length prompt-bytes) (cvector-ptr attempt) (cvector-length attempt) whole? special?))
   (cond
     [(< n-prompt 0)
      (define prompt-tokens (make-cvector _llama_token (- n-prompt)))
-     (when (< (llama_tokenize model prompt-bytes (bytes-length prompt-bytes) (cvector-ptr prompt-tokens) (- n-prompt) whole? special?) 0)
+     (when (< (llama_tokenize vocab prompt-bytes (bytes-length prompt-bytes) (cvector-ptr prompt-tokens) (- n-prompt) whole? special?) 0)
        (error 'tokenize "failed"))
      (values prompt-tokens (- n-prompt))]
     [else
@@ -182,7 +182,9 @@
   (define buf (make-bytes 128))
   (define cvec (make-cvector _llama_token 1))
 
-  (define smpl (make-sampler model grammar))
+  (define vocab (llama_model_get_vocab model))
+
+  (define smpl (make-sampler vocab grammar))
   (define begin-time (current-inexact-monotonic-milliseconds))
 
   (define (decode cvec off n)
@@ -201,7 +203,7 @@
   (define-values (prompt-tokens n-prompt)
     (if (cvector? prompt)
         (values prompt (cvector-length prompt))
-        (tokenize/cache model (string->bytes/utf-8 prompt) cache buf)))
+        (tokenize/cache vocab (string->bytes/utf-8 prompt) cache buf)))
   (when (> n-prompt max-ctx)
     (error 'completion "too large"))
 
@@ -231,10 +233,10 @@
   (define n-decode
     (let loop ([token-id init-token-id] [n-decode 1])
       (cond
-        [(llama_token_is_eog model token-id)
+        [(llama_token_is_eog vocab token-id)
          n-decode]
         [else
-         (define n (detoken model token-id buf))
+         (define n (detoken vocab token-id buf))
          (define finish?
            (cond
              [callback? (output buf n)]
@@ -262,12 +264,13 @@
 ;;; "safe" for special tokens
 (define (ffi-template-postprocessor mc parts)
   (define model (model-context-model mc))
+  (define vocab (llama_model_get_vocab model))
   (match-define (cons special-cache content-cache) (model-context-tpl-cache mc))
   (define (tokenize-special str [whole? #f])
     (cond
       [(hash-ref special-cache str (λ () #f)) => values]
       [else
-       (define-values (t n) (tokenize model (string->bytes/utf-8 str) #:whole? whole?))
+       (define-values (t n) (tokenize vocab (string->bytes/utf-8 str) #:whole? whole?))
        (define r (cons t n))
        (hash-set! special-cache str r)
        r]))
@@ -275,7 +278,7 @@
     (cond
       [(hash-ref content-cache str (λ () #f)) => values]
       [else
-       (define-values (t n) (tokenize model (string->bytes/utf-8 str) #:whole? #f #:special? #f))
+       (define-values (t n) (tokenize vocab (string->bytes/utf-8 str) #:whole? #f #:special? #f))
        (define r (cons t n))
        (hash-set! content-cache str r)
        r]))
