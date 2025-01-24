@@ -1,62 +1,95 @@
 #lang racket/base
-(require "../main.rkt")
+(require "../main.rkt" racket/match)
 (provide use-ffi-endpoint enlarge-context!)
 
-(define (bytes-suffix? buf n sub)
-  (and
-   (>= n (bytes-length sub))
-   (for/and ([b1 (in-bytes buf (- n (bytes-length sub)) n)]
-             [b2 (in-bytes sub)])
-     (= b1 b2))))
+(module suffix racket/base
+  (require racket/match)
+  (provide make-suffixes-checker)
 
-(define (bytes-contains? buf pre-pos n sub)
-  (cond
-    [(< n (bytes-length sub)) #f]
-    [else
-     (define lstart (max 0 (- pre-pos (- (bytes-length sub) 1))))
-     (define rstart (+ (- n (bytes-length sub)) 1))
-     (for/or ([i (in-range lstart rstart)])
-       (if (for/and ([b1 (in-bytes buf i)]
-                     [b2 (in-bytes sub)])
-             (= b1 b2))
-           i
-           #f))]))
+  (struct Check
+    (pattern n pi [current-state #:mutable]))
+
+  (define (make-suffix-check pattern)
+    (define n (bytes-length pattern))
+    (define chk (Check pattern n (compute-kmp-restart-vector pattern n) 0))
+    (λ (b)
+      (check-suffix-step chk b)))
+  (define (compute-kmp-restart-vector pattern m)
+    (define pi (make-vector m 0))
+    (let loop ([i 1] [length 0])
+      (cond
+        [(>= i m) pi]
+        [(= (bytes-ref pattern i)
+            (bytes-ref pattern length))
+         (vector-set! pi i (add1 length))
+         (loop (add1 i) (add1 length))]
+        [(zero? length)
+         (loop (add1 i) 0)]
+        [else
+         (loop i (vector-ref pi (sub1 length)))])))
+  (define (check-suffix-step check c)
+    (match-define (Check pattern n pi state) check)
+    (define next-state
+      (let loop ([state state])
+        (cond
+          [(and (< state n)
+                (= (bytes-ref pattern state) c))
+           (+ state 1)]
+          [(zero? state) state]
+          [else
+           (loop (vector-ref pi (- state 1)))])))
+    (set-Check-current-state! check next-state)
+    (cond
+      [(= next-state n) pattern]
+      [(> next-state 0) #t]
+      [else #f]))
+  (define (make-suffixes-checker bstops)
+    (define checkers (map make-suffix-check bstops))
+    (λ (b)
+      (define ls
+        (for/list ([c (in-list checkers)])
+          (c b)))
+      (or
+       (for/first ([item (in-list ls)]
+                   #:when (bytes? item))
+         item)
+       (for/or ([item (in-list ls)])
+         item)))))
+(require 'suffix)
 
 (define (make-stop-flusher output stops)
   (define bstops (map string->bytes/utf-8 stops))
-  (define partial-bstops
-    (for*/list ([bstop (in-list bstops)]
-                [i (in-range 1 (bytes-length bstop))])
-      (subbytes bstop 0 i)))
+  (define suffiex-checker (make-suffixes-checker bstops))
   (define buf (make-bytes 256))
   (define pos 0)
   (lambda (bstr n)
-    (for ([i (in-range n)])
-      (bytes-set! buf (+ pos i) (bytes-ref bstr i)))
-    (set! pos (+ pos n))
-    (cond
-      [(= n 0)
-       (write-bytes buf output 0 pos)
-       (flush-output output)
-       #t]
-      [(for/or ([bstop (in-list bstops)])
-         (bytes-contains? buf (- pos n) pos bstop))
-       =>
-       (λ (i)
-         (write-bytes buf output 0 i)
+    (let/ec break
+      (define partial?
+        (for/fold ([partial? #f])
+                  ([i (in-range n)])
+          (define b (bytes-ref bstr i))
+          (bytes-set! buf (+ pos i) b)
+          (match (suffiex-checker b)
+            [(? bytes? suffix)
+             (write-bytes buf output 0 (- (+ pos i 1) (bytes-length suffix)))
+             (flush-output output)
+             (set! pos 0)
+             (log-resp-trace (hasheq 'stop_type "word"))
+             (break #t)]
+            [p (or p partial?)])))
+      (set! pos (+ pos n))
+      (cond
+        [(= n 0)
+         (write-bytes buf output 0 pos)
+         (flush-output output)
+         #t]
+        [partial?
+         #f]
+        [else
+         (write-bytes buf output 0 pos)
          (flush-output output)
          (set! pos 0)
-         (log-resp-trace (hasheq 'stop_type "word"))
-         #t)]
-      [(for/first ([bstop (in-list partial-bstops)]
-                   #:when (bytes-suffix? buf pos bstop))
-         bstop)
-       #f]
-      [else
-       (write-bytes buf output 0 pos)
-       (flush-output output)
-       (set! pos 0)
-       #f])))
+         #f]))))
 
 (define current-model-context (make-parameter #f))
 
