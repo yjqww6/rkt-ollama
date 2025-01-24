@@ -11,9 +11,7 @@
 
   (define (make-suffix-check pattern)
     (define n (bytes-length pattern))
-    (define chk (Check pattern n (compute-kmp-restart-vector pattern n) 0))
-    (λ (b)
-      (check-suffix-step chk b)))
+    (Check pattern n (compute-kmp-restart-vector pattern n) 0))
   (define (compute-kmp-restart-vector pattern m)
     (define pi (make-vector m 0))
     (let loop ([i 1] [length 0])
@@ -27,7 +25,7 @@
          (loop (add1 i) 0)]
         [else
          (loop i (vector-ref pi (sub1 length)))])))
-  (define (check-suffix-step check c)
+  (define (check-suffix-step! check c)
     (match-define (Check pattern n pi state) check)
     (define next-state
       (let loop ([state state])
@@ -48,7 +46,7 @@
     (λ (b)
       (define ls
         (for/list ([c (in-list checkers)])
-          (c b)))
+          (check-suffix-step! c b)))
       (or
        (for/first ([item (in-list ls)]
                    #:when (bytes? item))
@@ -64,11 +62,12 @@
   (define pos 0)
   (lambda (bstr n)
     (let/ec break
+      ;; TODO reserve buf
+      (bytes-copy! buf pos bstr 0 n)
       (define partial?
         (for/fold ([partial? #f])
-                  ([i (in-range n)])
-          (define b (bytes-ref bstr i))
-          (bytes-set! buf (+ pos i) b)
+                  ([i (in-naturals)]
+                   [b (in-bytes bstr)])
           (match (suffiex-checker b)
             [(? bytes? suffix)
              (write-bytes buf output 0 (- (+ pos i 1) (bytes-length suffix)))
