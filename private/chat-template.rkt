@@ -197,6 +197,10 @@
 (define (mistral/v3/tekken msgs)
   (mistral/internal msgs #f #t))
 
+;; dummy name
+(define (mistral/v7/tekken msgs)
+  (mistral/internal msgs #t #t))
+
 (define (chat-template template-name)
   (match template-name
     ["chatml" chatml]
@@ -206,5 +210,6 @@
     ["mistral" mistral]
     ["mistral/v7" mistral/v7]
     ["mistral/v3/tekken" mistral/v3/tekken]
+    ["mistral/v7/tekken" mistral/v7/tekken]
     ["deepseek3" deepseek3]
     [else (error "Unknown template name: ~a" template-name)]))
