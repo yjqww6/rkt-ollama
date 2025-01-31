@@ -41,9 +41,9 @@
 
 (define (chat messages)
   (define data
-    (hash-set* (build-options)
-               'messages messages
-               'tools (current-tools)))
+    (hash-param 'messages messages
+                'tools (current-tools)
+                (build-options)))
   (define p
     (send "/v1/chat/completions" data))
   (response/producer p (reciever p)))
@@ -66,7 +66,7 @@
       (match j
         [(hash 'choices (list (hash 'message (hash 'tool_calls tool-calls #:open) #:open)) #:open)
          (tool-calls-output tool-calls)]
-      [else (void)])
+        [else (void)])
       (match j
         [(hash* ['choices (list (or (hash* ['delta (hash* ['content content])])
                                     (hash* ['message (hash* ['content content])])) _ ...)])
