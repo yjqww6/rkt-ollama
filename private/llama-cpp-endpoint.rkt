@@ -41,7 +41,9 @@
 
 (define (chat messages)
   (define data
-    (hash-set (build-options) 'messages messages))
+    (hash-set* (build-options)
+               'messages messages
+               'tools (current-tools)))
   (define p
     (send "/v1/chat/completions" data))
   (response/producer p (reciever p)))
@@ -56,11 +58,15 @@
                            prompt-tokens-per-second eval-tokens-per-seoncd))]
     [else (void)]))
 
-(define (handle-chat-response resp output)
+(define (handle-chat-response resp output tool-calls-output)
   (let/ec k
     (for ([j resp])
       (log-resp-trace j)
       (log-perf j)
+      (match j
+        [(hash 'choices (list (hash 'message (hash 'tool_calls tool-calls #:open) #:open)) #:open)
+         (tool-calls-output tool-calls)]
+      [else (void)])
       (match j
         [(hash* ['choices (list (or (hash* ['delta (hash* ['content content])])
                                     (hash* ['message (hash* ['content content])])) _ ...)])
@@ -86,7 +92,7 @@
    messages
    (λ (messages)
      (define resp (chat messages))
-     (handle-chat-response resp output)
+     (handle-chat-response resp output tool-calls-output)
      (close-response resp))))
 
 (define (handle-completion-response resp output)

@@ -69,20 +69,20 @@
                                                                                        #:auto?
                                                                                        [auto? #f])
   (let/ec k
-          (define calls
-            (parse (if parse-content?
-                       (hash-ref assistant 'content)
-                       assistant)))
-          (when (and calls (not (null? calls)))
-            (when auto?
-              (define guard (current-auto-guard))
-              (when (and guard (not (guard calls)))
-                (k)))
-            (define resp
-              (string-join (for/list ([call (in-list calls)])
-                             (make-response (callback call)))
-                           "\n"))
-            ((current-chat) (hasheq 'role (current-tool-role) 'content resp)))))
+    (define calls
+      (parse (if parse-content?
+                 (hash-ref assistant 'content)
+                 assistant)))
+    (when (and calls (not (null? calls)))
+      (when auto?
+        (define guard (current-auto-guard))
+        (when (and guard (not (guard calls)))
+          (k)))
+      (define resp
+        (string-join (for/list ([call (in-list calls)])
+                       (make-response (callback call)))
+                     "\n"))
+      ((current-chat) (hasheq 'role (current-tool-role) 'content resp)))))
 
 (define (make-json-gbnf #:defs [defs #f] . root)
   (define root-string
@@ -277,7 +277,7 @@ GBNF
   (define exec
     (make-exec (λ (assistant)
                  (match assistant
-                   [(hash* ['tool-calls (list (hash 'function calls) ...)])
+                   [(hash* ['tool_calls (list (hash 'function calls #:open) ...)])
                     calls]
                    [else #f]))
                callback
@@ -287,6 +287,32 @@ GBNF
                  [current-repl-prompt tool-repl-prompt]
                  [current-execute exec]
                  [current-tool-role "tool"])
+    (reset
+     (when auto?
+       (shift k (parameterize ([current-chat (make-auto-execute-chat)]) (k))))
+     (repl))))
+
+(define (use-oai-tools #:tools [tools default-tools]
+                             #:auto? [auto? #f])
+  (define callback (tools-callback tools))
+  (define exec
+    (make-exec (λ (assistant)
+                 (match assistant
+                   [(hash* ['tool_calls (list (hash 'function calls #:open) ...)])
+                    (for/list ([call (in-list calls)])
+                      (match call
+                        [(hash 'arguments arguments 'name name #:open)
+                         (hasheq 'arguments (string->jsexpr arguments)
+                                 'name name)]))]
+                   [else #f]))
+               callback
+               jsexpr->string
+               #:parse-content? #f))
+  (parameterize ([current-tools (map tool-desc tools)]
+                 [current-repl-prompt tool-repl-prompt]
+                 [current-execute exec]
+                 [current-tool-role "tool"]
+                 [current-stream #f])
     (reset
      (when auto?
        (shift k (parameterize ([current-chat (make-auto-execute-chat)]) (k))))

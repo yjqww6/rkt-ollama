@@ -71,7 +71,7 @@
     message
     (hash-param 'role "assistant"
                 'content (get-output-string sp)
-                'tool-calls (and (not (null? tool-calls))
+                'tool_calls (and (not (null? tool-calls))
                                  tool-calls)))))
 
 (define current-chat-endpoint
