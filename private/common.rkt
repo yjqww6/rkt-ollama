@@ -7,23 +7,7 @@
          "log.rkt")
 (provide (all-defined-out))
 
-(struct response (port)
-  #:property prop:sequence
-  (λ (resp)
-    (in-port
-     (λ (p)
-       (define l (read-line p 'any))
-       (cond
-         [(eof-object? l) l]
-         [else
-          (log-network-trace (network:recv l))
-          (string->jsexpr l)]))
-     (response-port resp))))
-
-(struct response/producer response (proc)
-  #:property prop:sequence
-  (λ (resp)
-    (in-producer (response/producer-proc resp) eof-object?)))
+(struct response (port))
 
 (define (close-response resp)
   (cond

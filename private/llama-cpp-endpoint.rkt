@@ -27,17 +27,23 @@
    'cache_prompt #t
    (current-options)))
 
-(define ((reciever port))
-  (let loop ()
-    (define l (read-line port 'any-one))
-    (when (non-empty-string? l)
-      (log-network-trace (network:recv l)))
-    (cond
-      [(eof-object? l) l]
-      [(not (non-empty-string? l)) (loop)]
-      [(not (string-prefix? l "data: ")) (string->jsexpr l)]
-      [(string=? l "data: [DONE]") eof]
-      [else (string->jsexpr (substring l 5))])))
+(struct response:llama-cpp response ()
+  #:property prop:sequence
+  (λ (resp)
+    (define port (response-port resp))
+    (in-producer
+     (λ ()
+       (let loop ()
+         (define l (read-line port 'any-one))
+         (when (non-empty-string? l)
+           (log-network-trace (network:recv l)))
+         (cond
+           [(eof-object? l) l]
+           [(not (non-empty-string? l)) (loop)]
+           [(not (string-prefix? l "data: ")) (string->jsexpr l)]
+           [(string=? l "data: [DONE]") eof]
+           [else (string->jsexpr (substring l 5))])))
+     eof-object?)))
 
 (define (chat messages)
   (define data
@@ -46,7 +52,7 @@
                 (build-options)))
   (define p
     (send "/v1/chat/completions" data))
-  (response/producer p (reciever p)))
+  (response:llama-cpp p))
 
 (define (log-perf j)
   (match j
@@ -109,7 +115,7 @@
 (define (completion prompt)
   (define data (hash-set (build-options) 'prompt prompt))
   (define p (send "/completion" data))
-  (response/producer p (reciever p)))
+  (response:llama-cpp p))
 
 (define (llama-cpp-completion-endpoint prompt output)
   (define resp (completion prompt))

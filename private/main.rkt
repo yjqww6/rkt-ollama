@@ -23,6 +23,19 @@
    'stop (current-stop)
    (current-options)))
 
+(struct response:ollama response ()
+  #:property prop:sequence
+  (λ (resp)
+    (in-port
+     (λ (p)
+       (define l (read-line p 'any))
+       (cond
+         [(eof-object? l) l]
+         [else
+          (log-network-trace (network:recv l))
+          (string->jsexpr l)]))
+     (response-port resp))))
+
 (define (chat messages)
   (define data
     (hash-param
@@ -32,7 +45,7 @@
      'stream (box (current-stream))
      'options (build-options)
      'format (and (current-enforce-json) "json")))
-  (response (send "/api/chat" data)))
+  (response:ollama (send "/api/chat" data)))
 
 (define (handle-chat-response resp output tool-calls-output)
   (for ([j resp]
@@ -83,7 +96,7 @@
                 'template template
                 'context context
                 'format (and (current-enforce-json) "json")))
-  (response (send "/api/generate" data)))
+  (response:ollama (send "/api/generate" data)))
 
 (define (ollama-completion-endpoint prompt output)
   (define resp (generate prompt #:raw? #t))
