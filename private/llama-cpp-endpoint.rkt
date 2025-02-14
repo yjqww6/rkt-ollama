@@ -74,8 +74,8 @@
          (tool-calls-output tool-calls)]
         [else (void)])
       (match j
-        [(hash* ['choices (list (or (hash* ['delta (hash* ['content content])])
-                                    (hash* ['message (hash* ['content content])])) _ ...)])
+        [(hash* ['choices (list (or (hash* ['delta (hash* ['content (? string? content)])])
+                                    (hash* ['message (hash* ['content (? string? content)])])) _ ...)])
          (write-string content output)
          (flush-output output)]
         [(hash* ['choices '()]) (void)]
