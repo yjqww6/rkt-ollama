@@ -5,7 +5,8 @@
          "json.rkt"
          "log.rkt")
 (require racket/match
-         racket/string)
+         racket/string
+         net/head)
 (provide llama-cpp-chat-endpoint llama-cpp-completion-endpoint llama-cpp-tokenize-endpoint)
 
 (define (build-options)
@@ -45,14 +46,29 @@
            [else (string->jsexpr (substring l 5))])))
      eof-object?)))
 
+(struct response:json response ()
+  #:property prop:sequence
+  (λ (resp)
+    (in-value
+     (read-json (response-port resp)))))
+
+(define TYPE-REGEXP (byte-regexp (bytes-append #"^(?i:" (regexp-quote #"Content-Type") #"): ")))
+(define TYPE-JSON-REGEXP (byte-regexp (bytes-append  #"(?i:" (regexp-quote #"application/json") #")")))
+
 (define (chat messages)
   (define data
     (hash-param 'messages messages
                 'tools (current-tools)
                 (build-options)))
-  (define p
-    (send "/v1/chat/completions" data))
-  (response:llama-cpp p))
+  (define-values (p headers)
+    (send "/v1/chat/completions" data #:return-headers #t))
+  (define whole?
+    (for/or ([h (in-list headers)])
+      (and (regexp-match? TYPE-REGEXP h)
+           (regexp-match? TYPE-JSON-REGEXP h))))
+  (if whole?
+      (response:json p)
+      (response:llama-cpp p)))
 
 (define (log-perf j)
   (match j

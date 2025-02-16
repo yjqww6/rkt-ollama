@@ -13,7 +13,7 @@
   (cond
     [(response-port resp) => close-input-port]))
 
-(define (send path j #:method [method "POST"])
+(define (send path j #:method [method "POST"] #:return-headers [return-headers #f])
   (define data (and j (djson->bytes j)))
   (when data
     (log-network-trace (network:send data)))
@@ -23,7 +23,9 @@
      #:port (current-port) #:method method
      #:headers '("Content-Type: application/json")
      #:data data))
-  port)
+  (cond
+    [return-headers (values port headers)]
+    [else port]))
 
 (define (call/interrupt proc [on-abort #f])
   (with-handlers* ([(λ (e) (and (exn:break? e)
