@@ -6,7 +6,7 @@
          "log.rkt")
 (require racket/match
          racket/string
-         net/head)
+         racket/port)
 (provide llama-cpp-chat-endpoint llama-cpp-completion-endpoint llama-cpp-tokenize-endpoint)
 
 (define (build-options)
@@ -49,8 +49,10 @@
 (struct response:json response ()
   #:property prop:sequence
   (λ (resp)
+    (define s (port->string (response-port resp) #:close? #t))
+    (log-network-trace (network:recv s))
     (in-value
-     (read-json (response-port resp)))))
+     (string->jsexpr s))))
 
 (define TYPE-REGEXP (byte-regexp (bytes-append #"^(?i:" (regexp-quote #"Content-Type") #"): ")))
 (define TYPE-JSON-REGEXP (byte-regexp (bytes-append  #"(?i:" (regexp-quote #"application/json") #")")))
