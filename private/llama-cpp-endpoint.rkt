@@ -82,7 +82,29 @@
                            prompt-tokens-per-second eval-tokens-per-seoncd))]
     [else (void)]))
 
+(define (merge-tool-call a b)
+  (match* (a b)
+    [((hash* ['id (? string? ida) #:default ""]
+             ['function
+              (hash*
+               ['name (? string? namea) #:default ""]
+               ['arguments (? string? argumentsa) #:default ""])])
+      (hash* ['id (? string? idb) #:default ""]
+             ['function
+              (hash*
+               ['name (? string? nameb) #:default ""]
+               ['arguments (? string? argumentsb) #:default ""])]))
+     (hash 'id (string-append ida idb)
+           'type "function"
+           'function
+           (hash
+            'name (string-append namea nameb)
+            'arguments (string-append argumentsa argumentsb)))]
+    [((? hash?) #f)  a]
+    [(#f (? hash?)) b]))
+
 (define (handle-chat-response resp output tool-calls-output)
+  (define stream-tools (make-hash))
   (let/ec k
     (for ([j resp])
       (log-resp-trace j)
@@ -90,6 +112,11 @@
       (match j
         [(hash 'choices (list (hash 'message (hash 'tool_calls tool-calls #:open) #:open)) #:open)
          (tool-calls-output tool-calls)]
+        [(hash* ['choices (list (hash* ['delta (hash* ['tool_calls tool-calls])]))])
+         (for ([tc (in-list tool-calls)])
+           (define index (hash-ref tc 'index (λ () 0)))
+           (define a (hash-ref stream-tools index (λ () #f)))
+           (hash-set! stream-tools index (merge-tool-call a tc)))]
         [else (void)])
       (match j
         [(hash* ['choices (list (or (hash* ['delta (hash* ['content (? string? content)])])
@@ -101,7 +128,9 @@
          (k)]
         [(hash* ['error _])
          (error 'chat "~a" j)]
-        [else (void)]))))
+        [else (void)])))
+  (unless (hash-empty? stream-tools)
+    (tool-calls-output (hash-values stream-tools))))
 
 (define (call/prefill-workaround messages proc)
   (match messages

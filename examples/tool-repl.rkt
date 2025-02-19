@@ -65,9 +65,8 @@
 
 (define current-auto-guard (make-parameter #f))
 
-(define ((make-exec parse callback make-response #:parse-content? [parse-content? #t]) assistant
-                                                                                       #:auto?
-                                                                                       [auto? #f])
+(define ((make-exec parse callback make-response #:parse-content? [parse-content? #t])
+         assistant #:auto? [auto? #f])
   (let/ec k
     (define calls
       (parse (if parse-content?
@@ -78,11 +77,14 @@
         (define guard (current-auto-guard))
         (when (and guard (not (guard calls)))
           (k)))
-      (define resp
-        (string-join (for/list ([call (in-list calls)])
-                       (make-response (callback call)))
-                     "\n"))
-      ((current-chat) (hasheq 'role (current-tool-role) 'content resp)))))
+      (define resps
+        (for/list ([call (in-list calls)])
+          (define resp (make-response (callback call)))
+          (hasheq 'role (current-tool-role) 'content resp)))
+      (match resps
+        [(list resp)
+         ((current-chat) resp)]
+        [else (void)]))))
 
 (define (make-json-gbnf #:defs [defs #f] . root)
   (define root-string
@@ -293,7 +295,7 @@ GBNF
      (repl))))
 
 (define (use-oai-tools #:tools [tools default-tools]
-                             #:auto? [auto? #f])
+                       #:auto? [auto? #f])
   (define callback (tools-callback tools))
   (define exec
     (make-exec (λ (assistant)
