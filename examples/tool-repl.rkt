@@ -75,16 +75,28 @@
     (when (and calls (not (null? calls)))
       (when auto?
         (define guard (current-auto-guard))
-        (when (and guard (not (guard calls)))
+        (define fc (map (λ (c) (or (hash-ref c 'function (λ () #f)) c)) calls))
+        (when (and guard (not (guard fc)))
           (k)))
+      (define (execute call)
+        (define-values (id? f)
+          (match call
+            [(hash* ['id id #:default #f] ['function f])
+             (values id f)]
+            [else (values #f call)]))
+        (define resp (make-response (callback f)))
+        (hash-param 'tool_call_id id? (hasheq 'role (current-tool-role) 'content resp)))
       (define resps
         (for/list ([call (in-list calls)])
-          (define resp (make-response (callback call)))
-          (hasheq 'role (current-tool-role) 'content resp)))
+          (execute call)))
       (match resps
         [(list resp)
          ((current-chat) resp)]
-        [else (void)]))))
+        [(list r ... resp)
+         (current-history
+          (parameterize ([current-history (append (current-history) r)])
+            ((current-chat) resp)
+            (current-history)))]))))
 
 (define (make-json-gbnf #:defs [defs #f] . root)
   (define root-string
@@ -300,12 +312,14 @@ GBNF
   (define exec
     (make-exec (λ (assistant)
                  (match assistant
-                   [(hash* ['tool_calls (list (hash 'function calls #:open) ...)])
-                    (for/list ([call (in-list calls)])
+                   [(hash* ['tool_calls (list (hash* ['id ids? #:default #f] ['function calls]) ...)])
+                    (for/list ([call (in-list calls)]
+                               [id? (in-list ids?)])
                       (match call
                         [(hash 'arguments arguments 'name name #:open)
-                         (hasheq 'arguments (string->jsexpr arguments)
-                                 'name name)]))]
+                         (hasheq 'id id? 'function
+                                 (hasheq 'arguments (string->jsexpr arguments)
+                                         'name name))]))]
                    [else #f]))
                callback
                jsexpr->string
