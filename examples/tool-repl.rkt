@@ -307,7 +307,8 @@ GBNF
      (repl))))
 
 (define (use-oai-tools #:tools [tools default-tools]
-                       #:auto? [auto? #f])
+                       #:auto? [auto? #f]
+                       #:tools-on-result? [tools-on-result? #t])
   (define callback (tools-callback tools))
   (define exec
     (make-exec (λ (assistant)
@@ -324,6 +325,7 @@ GBNF
                callback
                jsexpr->string
                #:parse-content? #f))
+  (define stream? (current-stream))
   (parameterize ([current-tools (map tool-desc tools)]
                  [current-repl-prompt tool-repl-prompt]
                  [current-execute exec]
@@ -332,4 +334,12 @@ GBNF
     (reset
      (when auto?
        (shift k (parameterize ([current-chat (make-auto-execute-chat)]) (k))))
+     (unless tools-on-result?
+       (define exec (current-execute))
+       (shift k (parameterize ([current-execute
+                                (λ (assistant #:auto? [auto? #f])
+                                  (parameterize ([current-tools #f]
+                                                 [current-stream stream?])
+                                    (exec assistant #:auto? auto?)))])
+                  (k))))
      (repl))))
