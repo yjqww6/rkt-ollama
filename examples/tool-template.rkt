@@ -133,7 +133,9 @@ TPL
 
 (define (parse-llama-toolcall response)
   (with-handlers ([exn:fail? (λ (e) #f)])
-    (match (regexp-match #px"<function=(\\w+)>\\s*(.*?)\\s*</function>" response)
-      [(list _ name args)
-       (list (hasheq 'name name 'arguments (string->jsexpr args)))]
-      [else #f])))
+    (match (regexp-match* #px"<function=(\\w+)>\\s*(.*?)\\s*</function>" response #:match-select cdr)
+      [(list (list names args) ...)
+       (for/list ([name (in-list names)]
+                  [arg (in-list args)])
+         (hasheq 'name name 'arguments (string->jsexpr arg)))]
+      [s #f])))
