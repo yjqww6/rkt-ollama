@@ -28,24 +28,6 @@
    'cache_prompt #t
    (current-options)))
 
-(struct response:llama-cpp response ()
-  #:property prop:sequence
-  (λ (resp)
-    (define port (response-port resp))
-    (in-producer
-     (λ ()
-       (let loop ()
-         (define l (read-line port 'any-one))
-         (when (non-empty-string? l)
-           (log-network-trace (network:recv l)))
-         (cond
-           [(eof-object? l) l]
-           [(not (non-empty-string? l)) (loop)]
-           [(not (string-prefix? l "data: ")) (string->jsexpr l)]
-           [(string=? l "data: [DONE]") eof]
-           [else (string->jsexpr (substring l 5))])))
-     eof-object?)))
-
 (struct response:json response ()
   #:property prop:sequence
   (λ (resp)
@@ -70,7 +52,7 @@
            (regexp-match? TYPE-JSON-REGEXP h))))
   (if whole?
       (response:json p)
-      (response:llama-cpp p)))
+      (response:event-stream p)))
 
 (define (log-perf j)
   (match j
@@ -171,13 +153,37 @@
 (define (completion prompt)
   (define data (hash-set (build-options) 'prompt prompt))
   (define p (send "/completion" data))
-  (response:llama-cpp p))
+  (response:event-stream p))
 
 (define (llama-cpp-completion-endpoint prompt output)
-  (define resp (completion prompt))
-  (begin0
-    (handle-completion-response resp output)
-    (close-response resp)))
+  (cond
+    [(llama-cpp-prefer-oai-completion)
+     (define resp (oai-completion prompt))
+     (begin0
+       (handle-oai-completion-response resp output)
+       (close-response resp))]
+    [else
+     (define resp (completion prompt))
+     (begin0
+       (handle-completion-response resp output)
+       (close-response resp))]))
+
+(define (handle-oai-completion-response resp stream-output)
+  (define output-content (open-output-string))
+  (let/ec k
+    (for ([j resp])
+      (log-resp-trace j)
+      (log-perf j)
+      (match j
+        [(hash* ['choices (list (hash* ['text content]))])
+         (write-string content output-content)
+         (stream-output content)])))
+  (get-output-string output-content))
+
+(define (oai-completion prompt)
+  (define data (hash-set (build-options) 'prompt prompt))
+  (define p (send "/v1/completions" data))
+  (response:event-stream p))
 
 (define (llama-cpp-tokenize-endpoint prompt)
   (define p (send "/tokenize" (hasheq 'content prompt)))

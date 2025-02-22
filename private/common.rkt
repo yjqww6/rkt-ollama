@@ -1,6 +1,7 @@
 #lang racket/base
 (require net/http-client
          racket/port
+         racket/string
          "config.rkt"
          "history.rkt"
          "json.rkt"
@@ -8,6 +9,24 @@
 (provide (all-defined-out))
 
 (struct response (port))
+
+(struct response:event-stream response ()
+  #:property prop:sequence
+  (λ (resp)
+    (define port (response-port resp))
+    (in-producer
+     (λ ()
+       (let loop ()
+         (define l (read-line port 'any-one))
+         (when (non-empty-string? l)
+           (log-network-trace (network:recv l)))
+         (cond
+           [(eof-object? l) l]
+           [(not (non-empty-string? l)) (loop)]
+           [(not (string-prefix? l "data: ")) (string->jsexpr l)]
+           [(string=? l "data: [DONE]") eof]
+           [else (string->jsexpr (substring l 5))])))
+     eof-object?)))
 
 (define (close-response resp)
   (cond

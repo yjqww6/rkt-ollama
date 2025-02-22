@@ -51,3 +51,5 @@
   ;; llama.cpp only
   [current-grammar]
   [current-json-schema])
+
+(define llama-cpp-prefer-oai-completion (make-parameter #f))
