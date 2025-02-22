@@ -16,13 +16,14 @@
       [sys (values (cons sys msgs) prefill)]
       [else (values msgs prefill)])))
 
-(define (in-messages msgs #:user [user #f] #:assistant [assistant #f])
+(define (in-messages msgs #:user [user #f] #:assistant [assistant #f] #:tool [tool #f])
   (sequence-map
    (λ (msg)
      (define role (hash-ref msg 'role))
      (values (cond
                [(string=? role "user") (or user role)]
                [(string=? role "assistant") (or assistant role)]
+               [(string=? role "tool") (or tool role)]
                [else role])
              (string-trim
               (match (hash-ref msg 'content)
@@ -90,7 +91,7 @@
 (define (llama3 messages)
   (define s (open-output))
   (define-values (msgs prefill) (split-messages messages))
-  (for ([(role content) (in-messages msgs)])
+  (for ([(role content) (in-messages msgs #:tool "ipython")])
     (push s (format "<|start_header_id|>~a<|end_header_id|>\n\n" role) #:special? #t)
     (push s content)
     (push s "<|eot_id|>" #:special? #t))

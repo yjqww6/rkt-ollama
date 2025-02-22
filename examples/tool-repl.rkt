@@ -243,7 +243,7 @@ GBNF
                  [current-messages-preprocessor
                   (make-system-preprocessor (λ (sys) (make-llama3-system-template sys)))]
                  [current-repl-prompt tool-repl-prompt]
-                 [current-tool-role "ipython"])
+                 [current-tool-role "tool"])
     (reset
      (cond
        [always?
@@ -282,7 +282,7 @@ GBNF
    (parameterize ([current-messages-preprocessor (make-system-preprocessor (λ (sys) (make-llama-system-template tools sys)))]
                   [current-execute exec]
                   [current-repl-prompt tool-repl-prompt]
-                  [current-tool-role "ipython"])
+                  [current-tool-role "tool"])
      (reset
       (when auto?
         (shift k (parameterize ([current-chat (make-auto-execute-chat)]) (k))))
