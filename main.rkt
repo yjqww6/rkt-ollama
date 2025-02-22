@@ -67,20 +67,24 @@
    values
    (λ (v) (or v (current-output-port)))))
 
+(define ((make-stream-output port) content)
+  (write-string content port)
+  (flush-output port))
+
 (define current-assistant-start (make-parameter #f))
 
 (define (chat #:output [output (current-chat-output-port)]
               #:start [fake (current-assistant-start)]
               . items)
   (with-cust _
-    (chat/history/output (build-message "user" items) output #:assistant-start fake)
+    (chat/history/output (build-message "user" items) (make-stream-output output) #:assistant-start fake)
     (void)))
 
 (define (completion #:output [output (current-chat-output-port)]
                     . items)
   (define-values (prompt images) (collect items))
   (with-cust _
-    (completion/output prompt output)
+    (completion/output prompt (make-stream-output output))
     (void)))
 
 (define (chat-by-completion
@@ -89,7 +93,7 @@
            . items)
     (with-cust _
       (completion/history/output (build-message "user" items)
-                                 output
+                                 (make-stream-output output)
                                  #:assistant-start fake)
       (void)))
 

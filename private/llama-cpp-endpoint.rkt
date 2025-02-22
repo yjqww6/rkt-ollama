@@ -103,15 +103,17 @@
     [((? hash?) #f)  a]
     [(#f (? hash?)) b]))
 
-(define (handle-chat-response resp output tool-calls-output)
+(define (handle-chat-response resp stream-output)
   (define stream-tools (make-hash))
+  (define tools '())
+  (define output-content (open-output-string))
   (let/ec k
     (for ([j resp])
       (log-resp-trace j)
       (log-perf j)
       (match j
-        [(hash 'choices (list (hash 'message (hash 'tool_calls tool-calls #:open) #:open)) #:open)
-         (tool-calls-output tool-calls)]
+        [(hash* ['choices (list (hash* ['message (hash* ['tool_calls tool-calls])]))])
+         (set! tools (append tools tool-calls))]
         [(hash* ['choices (list (hash* ['delta (hash* ['tool_calls tool-calls])]))])
          (for ([tc (in-list tool-calls)])
            (define index (hash-ref tc 'index (λ () 0)))
@@ -121,16 +123,20 @@
       (match j
         [(hash* ['choices (list (or (hash* ['delta (hash* ['content (? string? content)])])
                                     (hash* ['message (hash* ['content (? string? content)])])) _ ...)])
-         (write-string content output)
-         (flush-output output)]
+         (write-string content output-content)
+         (stream-output content)]
         [(hash* ['choices '()]) (void)]
         [(hash* ['choices (list (hash* ['finish_reason (? string?)]) _ ...)])
          (k)]
         [(hash* ['error _])
          (error 'chat "~a" j)]
         [else (void)])))
-  (unless (hash-empty? stream-tools)
-    (tool-calls-output (hash-values stream-tools))))
+  (hash-param 'role "assistant"
+              'content (get-output-string output-content)
+              'tool_calls (let ([all-tools (append tools (hash-values stream-tools))])
+                            (cond
+                              [(null? all-tools) #f]
+                              [else all-tools]))))
 
 (define (call/prefill-workaround messages proc)
   (match messages
@@ -140,24 +146,27 @@
     [else
      (proc messages)]))
 
-(define (llama-cpp-chat-endpoint messages output [fake #f] [tool-calls-output void])
+(define (llama-cpp-chat-endpoint messages output)
   (call/prefill-workaround
    messages
    (λ (messages)
      (define resp (chat messages))
-     (handle-chat-response resp output tool-calls-output)
-     (close-response resp))))
+     (begin0
+       (handle-chat-response resp output)
+       (close-response resp)))))
 
-(define (handle-completion-response resp output)
+(define (handle-completion-response resp stream-output)
+  (define output-content (open-output-string))
   (let/ec k
     (for ([j resp])
       (log-resp-trace j)
       (log-perf j)
       (match-define (hash* ['content content] ['stop stop]) j)
-      (write-string content output)
-      (flush-output output)
+      (write-string content output-content)
+      (stream-output content)
       (when stop
-        (k)))))
+        (k))))
+  (get-output-string output-content))
 
 (define (completion prompt)
   (define data (hash-set (build-options) 'prompt prompt))
@@ -166,8 +175,9 @@
 
 (define (llama-cpp-completion-endpoint prompt output)
   (define resp (completion prompt))
-  (handle-completion-response resp output)
-  (close-response resp))
+  (begin0
+    (handle-completion-response resp output)
+    (close-response resp)))
 
 (define (llama-cpp-tokenize-endpoint prompt)
   (define p (send "/tokenize" (hasheq 'content prompt)))

@@ -55,7 +55,7 @@
          item)))))
 (require 'suffix)
 
-(define (make-stop-flusher output stops)
+(define (make-stop-flusher bytes-stream-output stops)
   (define bstops (map string->bytes/utf-8 stops))
   (define suffiex-checker (make-suffixes-checker bstops))
   (define buf (make-bytes 256))
@@ -70,8 +70,7 @@
                    [b (in-bytes bstr)])
           (match (suffiex-checker b)
             [(? bytes? suffix)
-             (write-bytes buf output 0 (- (+ pos i 1) (bytes-length suffix)))
-             (flush-output output)
+             (bytes-stream-output buf (- (+ pos i 1) (bytes-length suffix)))
              (set! pos 0)
              (log-resp-trace (hasheq 'stop_type "word"))
              (break #t)]
@@ -79,25 +78,55 @@
       (set! pos (+ pos n))
       (cond
         [(= n 0)
-         (write-bytes buf output 0 pos)
-         (flush-output output)
+         (bytes-stream-output buf pos)
          #t]
         [partial?
          #f]
         [else
-         (write-bytes buf output 0 pos)
-         (flush-output output)
+         (bytes-stream-output buf pos)
          (set! pos 0)
          #f]))))
 
+(define (make-byte-stream-output stream-output)
+  (define left #"")
+  (λ (buf n)
+    (cond
+      [(and (= n 0) (> (bytes-length left) 0))
+       (define o (open-output-string))
+       (write-bytes left o)
+       (set! left #"")
+       (stream-output (get-output-string o))]
+      [else
+       (define all (if (> (bytes-length left) 0)
+                       (begin0 (bytes-append left (subbytes buf 0 n))
+                               (set! left #""))
+                       (subbytes buf 0 n)))
+       (let loop ([i 0])
+         (match (bytes-utf-8-ref all 0 #f i)
+           [#f
+            (when (> i 0)
+              (define str (bytes->string/utf-8 (subbytes all 0 i)))
+              (stream-output str))
+            (set! left (subbytes all i))]
+           [c
+            (define str (string c))
+            (loop (+ i (string-utf-8-length str)))]))])
+    #f))
+
 (define current-model-context (make-parameter #f))
 
-(define ((ffi-endpoint completion mc) prompt output)
+(define ((ffi-endpoint completion mc) prompt stream-output)
   (define stop (current-stop))
+  (define output-content (open-output-string))
+  (define byte-stream-output (make-byte-stream-output
+                              (λ (str)
+                                (write-string str output-content)
+                                (stream-output str))))
   (completion mc
-              prompt (cond
-                       [(or (not stop) (null? stop)) output]
-                       [else (make-stop-flusher output stop)])
+              prompt
+              (cond
+                [(or (not stop) (null? stop)) byte-stream-output]
+                [else (make-stop-flusher byte-stream-output stop)])
               #:n-predict (current-num-predict)
               #:perf (λ (p pp ppt tg tgt)
                        (log-perf-trace (perf p tg (/ ppt 1000) (/ tgt 1000)
@@ -107,7 +136,8 @@
                               (let ([t (current-inexact-monotonic-milliseconds)])
                                 (λ (off n kind)
                                   (printf "~a\t/~a\t ~a\t~ams~%"
-                                          off n kind (- (current-inexact-monotonic-milliseconds) t)))))))
+                                          off n kind (- (current-inexact-monotonic-milliseconds) t))))))
+  (get-output-string output-content))
 
 (define (use-ffi-endpoint model ctx #:kvcache-quant? [kvcache-quant? #f] #:template [tpl #f])
   (define init-model! (dynamic-require 'rkt-ollama/examples/ffi-endpoint 'init-model!))

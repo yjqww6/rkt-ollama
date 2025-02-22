@@ -147,17 +147,20 @@ GBNF
     (old-trace net))
 
   (define old-completion (current-completion-endpoint))
-  (λ (prompt output)
-    (define p (open-output-string))
+  (λ (prompt stream-output)
+    (define output-content (open-output-string))
     (parameterize ([has-tool #f])
-      (parameterize ([current-stop (list trigger)]
-                     [current-resp-trace new-trace])
-        (old-completion prompt (combine-output output p)))
-      (when (has-tool)
-        (define new-prompt (string-append prompt (get-output-string p) trigger))
-        (parameterize ([current-grammar grammar])
-          (write-string trigger output)
-          (old-completion new-prompt output))))))
+      (define prefix
+        (parameterize ([current-stop (list trigger)]
+                       [current-resp-trace new-trace])
+          (old-completion prompt stream-output)))
+      (cond
+        [(not (has-tool)) prefix]
+        [else
+         (define new-prompt (string-append prompt prefix trigger))
+         (parameterize ([current-grammar grammar])
+           (stream-output trigger)
+           (string-append prefix trigger (old-completion new-prompt stream-output)))]))))
 
 (define (use-nous-tools #:tools [tools default-tools]
                         #:auto? [auto? #f]

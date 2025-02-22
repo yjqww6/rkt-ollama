@@ -168,7 +168,7 @@
       (loop)))
   diff)
 
-(define (completion mc prompt output
+(define (completion mc prompt stream-output
                     #:n-predict [n-predict 256]
                     #:perf [perf #f]
                     #:grammar [grammar #f]
@@ -228,8 +228,6 @@
 
   (define decode-time (current-inexact-monotonic-milliseconds))
 
-  (define callback? (procedure? output))
-
   (define n-decode
     (let loop ([token-id init-token-id] [n-decode 1])
       (cond
@@ -237,13 +235,7 @@
          n-decode]
         [else
          (define n (detoken vocab token-id buf))
-         (define finish?
-           (cond
-             [callback? (output buf n)]
-             [else
-              (write-bytes buf output 0 n)
-              (flush-output output)
-              #f]))
+         (define finish? (stream-output buf n))
          (event)
          (cond
            [finish? n-decode]
@@ -253,7 +245,7 @@
             (decode cvec 0 1)
             (loop (llama_sampler_sample smpl ctx -1) (+ n-decode 1))]
            [else n-decode])])))
-  (when callback? (output buf 0))
+  (stream-output buf 0)
   (free-sampler smpl)
   
   (define end-time (current-inexact-monotonic-milliseconds))

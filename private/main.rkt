@@ -47,38 +47,55 @@
      'format (and (current-enforce-json) "json")))
   (response:ollama (send "/api/chat" data)))
 
-(define (handle-chat-response resp output tool-calls-output)
+(define (handle-chat-response resp stream-output)
+  (define tools '())
+  (define output-content (open-output-string))
   (for ([j resp]
         #:final (hash-ref j 'done #f))
     (log-resp-trace j)
     (perf-trace j)
     (match j
       [(hash* ['message (hash* ['tool_calls tool-calls])])
-       (tool-calls-output tool-calls)]
+       (set! tools (append tools tool-calls))]
       [else (void)])
     (match j
       [(hash* ['message (hash* ['content content])])
-       (write-string content output)
-       (flush-output output)]
+       (write-string content output-content)
+       (stream-output content)]
       [(hash* ['error err])
-       (error 'chat/history "~a" err)])))
+       (error 'chat/history "~a" err)]))
+  (hash-param 'role "assistant"
+              'content (get-output-string output-content)
+              'tool_calls (and (not (null? tools))
+                               tools)))
 
-(define (ollama-chat-endpoint messages output [fake #f] [tool-calls-output void])
+(define (ollama-chat-endpoint messages stream-output)
   (define resp (chat messages))
-  (when fake (write-string fake output))
-  (handle-chat-response resp output tool-calls-output)
-  (close-response resp))
+  (define fake
+    (match messages
+      [(list m ... (hash 'role "assistant" 'content fake))
+       (stream-output fake)
+       fake]
+      [else #f]))
+  (define msg (handle-chat-response resp stream-output))
+  (close-response resp)
+  (if fake
+      (hash-set msg
+                'content (string-append fake (hash-ref msg 'content)))
+      msg))
 
-(define (handle-generate-response resp output)
+(define (handle-generate-response resp stream-output)
+  (define output-content (open-output-string))
   (for ([j resp])
     (log-resp-trace j)
     (perf-trace j)
     (match j
       [(hash* ['done done] ['response content])
-       (write-string content output)
-       (flush-output output)]
+       (write-string content output-content)
+       (stream-output content)]
       [(hash* ['error err])
-       (error 'generate "~a" err)])))
+       (error 'generate "~a" err)]))
+  (get-output-string output-content))
 
 (define (generate prompt
                   #:images [images #f]
@@ -100,8 +117,9 @@
 
 (define (ollama-completion-endpoint prompt output)
   (define resp (generate prompt #:raw? #t))
-  (handle-generate-response resp output)
-  (close-response resp))
+  (begin0
+    (handle-generate-response resp output)
+    (close-response resp)))
 
 (define (perf-trace j)
   (match j

@@ -46,51 +46,45 @@
       (current-history)
       message
       (fake-assistant fake))))
-  (define sp (open-output-string))
-  (define tool-calls '())
-  (define (save-tool-calls ts)
-    (set! tool-calls (append tool-calls ts)))
-  (proc messages sp save-tool-calls)
+  (define msg (proc messages))
   (current-history
    (append-history
     (current-history)
     message
-    (hash-param 'role "assistant"
-                'content (get-output-string sp)
-                'tool_calls (and (not (null? tool-calls))
-                                 tool-calls)))))
+    msg))
+  msg)
 
 (define current-chat-endpoint
-  (make-parameter (λ (messages output [fake #f]) (error 'chat "no endpoint"))))
+  (make-parameter (λ (messages stream-output) (error 'chat "no endpoint"))))
 
 (define current-completion-endpoint
-  (make-parameter (λ (prompt output) (error 'completion "no endpoint"))))
+  (make-parameter (λ (prompt stream-output) (error 'completion "no endpoint"))))
 
-(define (chat/history/output message output
+(define (chat/history/output message stream-output
                              #:assistant-start [fake #f])
   (call/history
    message
-   (λ (messages sp tool-calls-output)
+   (λ (messages)
      (call/interrupt
       (λ ()
-        ((current-chat-endpoint) messages (combine-output sp output) fake tool-calls-output))))
+        ((current-chat-endpoint) messages stream-output))))
    #:assistant-start fake))
 
-(define (completion/history/output message output
+(define (completion/history/output message stream-output
                                    #:assistant-start [fake #f] #:template [template (current-chat-template)])
   (call/history
    message
-   (λ (messages sp _)
+   (λ (messages)
      (define prompt ((current-template-postprocessor) (template messages)))
-     (define new-output (combine-output sp output))
-     (when fake (write-string fake new-output))
+     (when fake (stream-output fake))
      (call/interrupt
       (λ ()
-        ((current-completion-endpoint) prompt new-output))))
+        (define content ((current-completion-endpoint) prompt stream-output))
+        (hasheq 'role "assistant" 'content (if fake (string-append fake content) content)))))
    #:assistant-start fake))
 
-(define (completion/output prompt output)
-  ((current-completion-endpoint) prompt output))
+(define (completion/output prompt stream-output)
+  ((current-completion-endpoint) prompt stream-output))
 
 (define current-tokenize-endpoint
   (make-parameter (make-parameter (λ (prompt) (error 'tokenize "no endpoint")))))
