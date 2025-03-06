@@ -1,5 +1,5 @@
 #lang racket/base
-(require racket/match)
+(require racket/match racket/bool racket/string racket/list)
 (provide (all-defined-out))
 
 (define current-system (make-parameter #f))
@@ -53,9 +53,28 @@
 (define (clear)
   (current-history '()))
 
+(define current-skip-cot-tokens (make-parameter #t))
+(define (skip-cot-tokens msgs [sep "</think>"] #:skip-current? [skip-current? #t])
+  (cond
+    [(current-skip-cot-tokens)
+     (define end (length msgs))
+     (for/list ([m (in-list msgs)]
+                [i (in-naturals 1)])
+       (match m
+         [(hash 'role "assistant" 'content content #:open)
+          #:when (implies skip-current? (< i end))
+          #:when (string-contains? content sep)
+          (hash-set m 'content
+                    (string-trim (last (string-split content sep)) "\n"
+                                 #:right? #f #:repeat? #t))]
+         [else m]))]
+    [else msgs]))
+
+(define current-messages-preprocessor (make-parameter skip-cot-tokens))
+
 ;;; for raw completion
 (define (default-template-postprocessor parts)
   (apply string-append-immutable (map (λ (s) (if (box? s) (unbox s) s)) parts)))
 (define current-chat-template (make-parameter (λ (messages) (error 'empty-template))))
-(define current-messages-preprocessor (make-parameter values))
 (define current-template-postprocessor (make-parameter default-template-postprocessor))
+

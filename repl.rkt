@@ -162,12 +162,6 @@
      (current-chat (make-default-chat chat-by-completion))])
   (use-llama-cpp))
 
-(define (skip-cot-tokens!)
-  (define next (current-messages-preprocessor))
-  (define (f msgs)
-    (next (skip-cot-tokens msgs)))
-  (current-messages-preprocessor f))
-
 (module+ main
   (require expeditor (submod expeditor configure)
            racket/port racket/cmdline racket/runtime-path
